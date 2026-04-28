@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: tauri: asset:; connect-src 'self' tauri:; script-src 'self'; style-src 'self'; img-src 'self' data: asset:; media-src 'self' data: asset:; font-src 'self';">
+  <title>TouchGrass - Digital Wellbeing</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+      <nav class="menu">
+        <p class="menu-label">Menu</p>
+        <button class="menu-btn active" data-page-btn="dashboard"><svg class="icon"><use href="#i-dashboard"></use></svg><span>Dashboard</span></button>
+        <button class="menu-btn" data-page-btn="analytics"><svg class="icon"><use href="#i-chart"></use></svg><span>Analytics</span></button>
+        <button class="menu-btn" data-page-btn="music"><svg class="icon"><use href="#i-target"></use></svg><span>Calm Music</span></button>
+
+        <p class="menu-label spaced">Preferences</p>
+              <h3>7 Day Analytics</h3>
+              <span class="tag" id="analytics-range-label">Today</span>
+
+            <div class="analytics-topline analytics-overview-grid">
+              <div class="analytics-metric">
+                <p class="analytics-kicker">Today</p>
+                <h2 id="analytics-today-label">Monday</h2>
+                <span id="analytics-today-date">--</span>
+              </div>
+              <div class="analytics-metric">
+                <p class="analytics-kicker">Daily average</p>
+                <h2 id="analytics-average-time">0h 0m</h2>
+                <span>Across last 7 days</span>
+              </div>
+              <div class="analytics-metric">
+                <p class="analytics-kicker">Most used day</p>
+                <h2 id="analytics-most-day">-</h2>
+                <span id="analytics-most-day-time">-</span>
+              </div>
+              <div class="analytics-metric">
+                <p class="analytics-kicker">Least used day</p>
+                <h2 id="analytics-least-day">-</h2>
+                <span id="analytics-least-day-time">-</span>
+              </div>
+    <main class="main-area">
+      <section class="header-row" data-tauri-drag-region>
+        <div>
+          <h1 id="greeting-text">Good Morning!</h1>
+          <p class="status-row"><span class="status-dot"></span><span id="tracking-summary-text">Tracking active PC session</span></p>
+            <div class="card-head">
+              <h3>Top 5 Apps</h3>
+              <span class="tag">Descending order</span>
+          <button class="icon-btn" aria-label="Notifications"><svg class="icon"><use href="#i-bell"></use></svg></button>
+          <button class="icon-btn" aria-label="Calendar"><svg class="icon"><use href="#i-calendar"></use></svg></button>
+        </div>
+      </section>
+
+        <article class="card analytics-card analytics-wide">
+          <div class="card-head">
+            <h3>7 Day Archive</h3>
+            <span class="tag" id="analytics-record-count">0 days stored</span>
+          </div>
+          <div id="analytics-days" class="analytics-days"></div>
+        </article>
+
+      <section class="page-view page-active" data-page="dashboard">
+        <div class="grid-layout">
+        <article class="card summary-card dashboard-summary-card">
+          <div class="progress-wrap">
+            <svg viewBox="0 0 36 36" class="progress-svg" aria-hidden="true">
+              <path class="circle-bg" d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+              <path id="progress-circle" class="circle-fill" stroke-dasharray="0 100" d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+              <text x="18" y="16.5" text-anchor="middle" font-size="6" font-weight="700" fill="#0f172a" id="hero-hours">0h 0m</text>
+              <text x="18" y="21" text-anchor="middle" font-size="2.5" fill="#64748b" font-weight="600">Total PC Time</text>
+            </svg>
+          </div>
+          <div class="summary-right">
+            <h2>Today's Summary</h2>
+            <p class="summary-copy">You are <span class="on-track">on track</span> for today.</p>
+            <div class="summary-pill-row">
+              <div class="summary-pill">
+                <span class="summary-pill-label">Top app</span>
+                <span class="summary-pill-value" id="top-app-inline">Unknown</span>
+              </div>
+              <div class="summary-pill">
+                <span class="summary-pill-label">Tracking</span>
+                <span class="summary-pill-value" id="tracking-inline">On</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card focus-card">
+          <h3><svg class="icon"><use href="#i-timer"></use></svg>Focus Mode</h3>
+          <p id="focus-time-display" class="focus-time">25:00</p>
+          <p class="focus-subtitle">Deep work session</p>
+          <div class="focus-actions">
+            <button id="focus-btn" class="btn btn-primary">Start Focus</button>
+            <button id="focus-reset-btn" class="btn btn-soft" aria-label="Reset focus timer"><svg class="icon"><use href="#i-rotate"></use></svg></button>
+          </div>
+        </article>
+
+        <article class="card usage-card">
+          <div class="card-head">
+            <h3>Application Usage</h3>
+            <span class="tag" id="top-app-label">Top app: loading...</span>
+          </div>
+          <div id="app-usage-container" class="usage-list"></div>
+        </article>
+
+        <article class="card breathe-card">
+          <div>
+            <div class="breathe-badge"><svg class="icon"><use href="#i-wind"></use></svg></div>
+            <h3>Take a breath</h3>
+            <p>PC eye strain building up? Run a 1-minute exercise to reset.</p>
+          </div>
+          <button id="open-breathe-btn" class="btn btn-light">Start Breathing Exercise</button>
+        </article>
+        </div>
+      </section>
+
+      <section class="page-view" data-page="analytics">
+        <div class="analytics-layout">
+          <article class="card analytics-card">
+            <div class="card-head">
+              <h3>7 Day Analytics</h3>
+              <span class="tag" id="analytics-range-label">Today</span>
+            </div>
+            <div class="analytics-topline analytics-overview-grid">
+              <div class="analytics-metric">
+                <p class="analytics-kicker">Today</p>
+                <h2 id="analytics-today-label">Monday</h2>
+                <span id="analytics-today-date">--</span>
+              </div>
+              <div class="analytics-metric">
+                <p class="analytics-kicker">Daily average</p>
+                <h2 id="analytics-average-time">0h 0m</h2>
+                <span>Across the stored 7-day window</span>
+              </div>
+              <div class="analytics-metric">
+                <p class="analytics-kicker">Most used day</p>
+                <h2 id="analytics-most-day">-</h2>
+                <span id="analytics-most-day-time">-</span>
+              </div>
+              <div class="analytics-metric">
+                <p class="analytics-kicker">Least used day</p>
+                <h2 id="analytics-least-day">-</h2>
+                <span id="analytics-least-day-time">-</span>
+              </div>
+            </div>
+            <div id="analytics-chart" class="analytics-bars"></div>
+          </article>
+
+          <article class="card analytics-card">
+            <div class="card-head">
+              <h3>Top 5 Apps</h3>
+              <span class="tag">Descending order</span>
+            </div>
+            <div id="analytics-list" class="analytics-list"></div>
+          </article>
+        </div>
+
+        <article class="card analytics-card analytics-wide">
+          <div class="card-head">
+            <h3>7 Day Archive</h3>
+            <span class="tag" id="analytics-record-count">0 days stored</span>
+          </div>
+          <div id="analytics-days" class="analytics-days"></div>
+        </article>
+      </section>
+
+      <section class="page-view" data-page="music">
+        <div class="music-layout">
+          <article class="card music-card">
+            <div class="card-head">
+              <h3>Calm Music</h3>
+              <span class="tag">Offline audio</span>
+            </div>
+            <div class="music-hero">
+              <div class="music-orb"></div>
+              <div>
+                <h2>Soft Focus Ambient</h2>
+                <p>Gentle background audio for low-distraction work.</p>
+              </div>
+            </div>
+            <audio id="calm-audio" src="./audio.mp3" loop preload="auto"></audio>
+            <div class="music-controls">
+              <button id="music-toggle-btn" class="btn btn-primary">Play</button>
+              <button id="music-stop-btn" class="btn btn-soft">Stop</button>
+            </div>
+            <div class="music-meta">
+              <span>Volume</span>
+              <input id="music-volume" type="range" min="0" max="1" step="0.05" value="0.35">
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page-view" data-page="settings">
+        <div class="settings-page-layout">
+          <article class="card settings-card settings-card-wide">
+            <div class="settings-head">
+              <h4>Runtime Settings</h4>
+              <p>Control background behavior and startup preferences.</p>
+            </div>
+
+            <div class="settings-list">
+              <div class="settings-row">
+                <div>
+                  <p class="settings-title">Tracking Engine</p>
+                  <p class="settings-subtitle" id="tracking-status-text">Tracking is active</p>
+                </div>
+                <button id="tracking-toggle-btn" class="btn btn-toggle on" type="button" aria-label="Toggle tracking">Tracking ON</button>
+              </div>
+
+              <div class="settings-row">
+                <div>
+                  <p class="settings-title">Launch On Startup</p>
+                  <p class="settings-subtitle" id="startup-status-text">Launch on startup is disabled</p>
+                </div>
+                <button id="startup-toggle-btn" class="btn btn-toggle off" type="button" aria-label="Toggle launch on startup">Startup OFF</button>
+              </div>
+
+              <div class="settings-row">
+                <div>
+                  <p class="settings-title">Hide On Close</p>
+                  <p class="settings-subtitle" id="close-behavior-status-text">Close action hides app to tray</p>
+                </div>
+                <button id="close-behavior-toggle-btn" class="btn btn-toggle on" type="button" aria-label="Toggle hide on close">Hide On Close</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="breathe-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="breathe-title">
+    <div id="breathe-modal-content" class="modal-card">
+      <button id="close-breathe-btn" class="icon-btn close-btn" aria-label="Close"><svg class="icon"><use href="#i-close"></use></svg></button>
+      <div class="breathe-badge"><svg class="icon"><use href="#i-wind"></use></svg></div>
+      <h2 id="breathe-title">Mindful Breathing</h2>
+      <p id="breathe-instruction" class="breathe-instruction">Take a moment to center yourself.</p>
+      <div class="breathe-stage">
+        <div id="breathe-circle" class="breathe-circle"><span id="breathe-timer">60</span></div>
+      </div>
+      <button id="start-breathe-btn" class="btn btn-primary block">Start Exercise</button>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
