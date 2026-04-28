@@ -636,27 +636,6 @@ h1 {
   margin-bottom: 14px;
 }
 
-.analytics-overview-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.analytics-metric {
-  border: 1px solid #e5ecf5;
-  border-radius: 14px;
-  background: #fbfdff;
-  padding: 14px;
-}
-
-.analytics-metric h2 {
-  margin: 2px 0 4px;
-  font-size: 22px;
-}
-
-.analytics-metric span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .analytics-kicker {
   margin: 0 0 4px;
   font-size: 12px;
@@ -707,45 +686,6 @@ h1 {
 .analytics-list {
   display: grid;
   gap: 10px;
-}
-
-.analytics-days {
-  display: grid;
-  gap: 10px;
-}
-
-.analytics-day-row {
-  display: grid;
-  gap: 6px;
-}
-
-.analytics-day-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.analytics-day-meta {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.analytics-day-track {
-  height: 12px;
-  border-radius: 99px;
-  background: #edf2f7;
-  overflow: hidden;
-}
-
-.analytics-day-fill {
-  height: 100%;
-  width: 0;
-  border-radius: 99px;
-  background: linear-gradient(90deg, #0b7fab, #46b45f);
-  transition: width 0.8s ease;
 }
 
 .analytics-list-item {
@@ -828,11 +768,6 @@ h1 {
 
 .dashboard-summary-card {
   grid-column: span 12;
-}
-
-.analytics-wide {
-  grid-column: span 12;
-  margin-top: 14px;
 }
 
 .settings-head h4 {
@@ -1044,10 +979,6 @@ h1 {
   .analytics-layout {
     grid-template-columns: 1fr;
   }
-
-  .analytics-overview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 780px) {
@@ -1088,9 +1019,5 @@ h1 {
 
   .music-controls {
     flex-direction: column;
-  }
-
-  .analytics-overview-grid {
-    grid-template-columns: 1fr;
   }
 }
