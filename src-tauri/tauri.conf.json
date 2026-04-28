@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "arise",
+  "productName": "TouchGrass",
   "version": "0.1.0",
-  "identifier": "com.pranay.arise",
+  "identifier": "com.pranay.touchgrass",
   "build": {
     "frontendDist": "../src"
   },
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Arise by Pranay",
+        "title": "TouchGrass",
         "width": 1500,
         "height": 1000,
         "decorations": false
