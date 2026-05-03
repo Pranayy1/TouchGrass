@@ -21,6 +21,8 @@ Built with Tauri, Rust, and vanilla HTML/CSS/JS.
 - [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Windows 11)
 - [Node.js](https://nodejs.org/) v18+
 - [Rust](https://rustup.rs/)
+- [Visual Studio](https://visualstudio.microsoft.com/) — required for the **Desktop development with C++** workload, which Tauri needs to compile on Windows. You don't need to write or edit any code in Visual Studio — just install it once and do all your actual development in VS Code.
+
 
 ## Setup & Development
 
@@ -48,7 +50,12 @@ Built with Tauri, Rust, and vanilla HTML/CSS/JS.
 
 ## Recommended IDE Setup
 
-[VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+[VS Code](https://code.visualstudio.com/) is the recommended editor for this project, paired with these extensions:
+
+- [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)
+- [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+> **Note:** Before you start, make sure you have [Visual Studio](https://visualstudio.microsoft.com/) installed with the **Desktop development with C++** workload enabled. This is a one-time setup step required by Tauri on Windows — open the Visual Studio Installer, select that workload, and install it. After that, you can close Visual Studio entirely and work exclusively in VS Code.
 
 ## Download
 
