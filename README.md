@@ -1,7 +1,55 @@
-# Tauri + Vanilla
+# TouchGrass — Digital Wellbeing for Desktop
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.
+A lightweight digital wellbeing app for Windows that tracks your screen time and helps you stay focused.
+Built with Tauri, Rust, and vanilla HTML/CSS/JS.
+
+![TouchGrass Screenshot](./src/assets/image.png)
+
+## Features
+
+- Real-time app usage tracking with live progress bars
+- 7-day analytics with per-app breakdown
+- Focus Mode — 25-minute Pomodoro timer
+- Breathing Exercise — 1-minute guided reset
+- Calm Music — built-in ambient audio player
+- System tray support — runs quietly in the background
+- Launch on startup option
+
+## Requirements
+
+- Windows 10 / 11 (64-bit)
+- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Windows 11)
+- [Node.js](https://nodejs.org/) v18+
+- [Rust](https://rustup.rs/)
+
+## Setup & Development
+
+1. Clone the repository
+```bash
+   git clone https://github.com/Pranayy1/TouchGrass.git
+   cd TouchGrass
+```
+
+2. Install dependencies
+```bash
+   npm install
+```
+
+3. Run in development mode
+```bash
+   npm run tauri dev
+```
+
+4. Build for production
+```bash
+   npm run tauri build
+```
+   The installer will be output to `src-tauri/target/release/bundle/`.
 
 ## Recommended IDE Setup
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+[VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+## Download
+
+Head to the [Releases](https://github.com/Pranayy1/TouchGrass/releases) page to download the latest installer.
