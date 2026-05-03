@@ -13,12 +13,14 @@
         "title": "TouchGrass",
         "width": 1500,
         "height": 1000,
-        "decorations": false
+        "minWidth": 900,
+"minHeight": 600,
+        "decorations": true
       }
     ],
-    "security": {
-      "csp": null
-    }
+   "security": {
+  "csp": "default-src 'self' tauri: asset:; script-src 'self'; style-src 'self'; img-src 'self' data: asset:; media-src 'self' data: asset:"
+}
   },
   "bundle": {
     "active": true,

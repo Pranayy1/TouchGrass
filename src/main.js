@@ -1,5 +1,7 @@
 const SECONDS_PER_MINUTE = 60;
 const DAILY_GOAL_SECONDS = 8 * 60 * 60;
+const ANALYTICS_STORAGE_KEY = "touchgrass_analytics_v1";
+const ANALYTICS_WINDOW_DAYS = 7;
 const USAGE_FILL_CLASSES = ["code", "browser", "chat", "music"];
 const FALLBACK_APPS = [
 	{ name: "No data yet", seconds: 1, percent: 100 },
@@ -14,7 +16,6 @@ document.addEventListener("DOMContentLoaded", () => {
 	const dom = {
 		actualTime: document.getElementById("actual-time"),
 		greeting: document.getElementById("greeting-text"),
-		sessionTimer: document.getElementById("session-timer"),
 		heroHours: document.getElementById("hero-hours"),
 		progressCircle: document.getElementById("progress-circle"),
 		appUsageContainer: document.getElementById("app-usage-container"),
@@ -28,16 +29,22 @@ document.addEventListener("DOMContentLoaded", () => {
 		trackingSummaryText: document.getElementById("tracking-summary-text"),
 		topAppInline: document.getElementById("top-app-inline"),
 		trackingInline: document.getElementById("tracking-inline"),
-		analyticsTopApp: document.getElementById("analytics-top-app"),
-		analyticsTotalTime: document.getElementById("analytics-total-time"),
+		analyticsRangeLabel: document.getElementById("analytics-range-label"),
+		analyticsTodayLabel: document.getElementById("analytics-today-label"),
+		analyticsTodayDate: document.getElementById("analytics-today-date"),
+		analyticsAverageTime: document.getElementById("analytics-average-time"),
+		analyticsMostDay: document.getElementById("analytics-most-day"),
+		analyticsMostDayTime: document.getElementById("analytics-most-day-time"),
+		analyticsLeastDay: document.getElementById("analytics-least-day"),
+		analyticsLeastDayTime: document.getElementById("analytics-least-day-time"),
+		analyticsRecordCount: document.getElementById("analytics-record-count"),
 		analyticsChart: document.getElementById("analytics-chart"),
 		analyticsList: document.getElementById("analytics-list"),
+		analyticsDays: document.getElementById("analytics-days"),
 		musicAudio: document.getElementById("calm-audio"),
 		musicToggleBtn: document.getElementById("music-toggle-btn"),
 		musicStopBtn: document.getElementById("music-stop-btn"),
 		musicVolume: document.getElementById("music-volume"),
-		titleHideBtn: document.getElementById("title-hide-btn"),
-		titleQuitBtn: document.getElementById("title-quit-btn"),
 		focusDisplay: document.getElementById("focus-time-display"),
 		focusBtn: document.getElementById("focus-btn"),
 		focusResetBtn: document.getElementById("focus-reset-btn"),
@@ -47,7 +54,8 @@ document.addEventListener("DOMContentLoaded", () => {
 		breatheTimer: document.getElementById("breathe-timer"),
 		startBreatheBtn: document.getElementById("start-breathe-btn"),
 		openBreatheBtn: document.getElementById("open-breathe-btn"),
-		closeBreatheBtn: document.getElementById("close-breathe-btn")
+		closeBreatheBtn: document.getElementById("close-breathe-btn"),
+		focusToast: document.getElementById("focus-toast")
 	};
 
 	const state = {
@@ -66,13 +74,18 @@ document.addEventListener("DOMContentLoaded", () => {
 		launchOnStartupEnabled: false,
 		hideOnCloseEnabled: true,
 		usageApps: [],
+		analyticsArchive: loadAnalyticsArchive(),
 		activePage: "dashboard",
 		unsubscribeUsageListener: null,
 		unsubscribeTrackingListener: null
 	};
 
+	const todayRecord = state.analyticsArchive.days.find((entry) => entry.dateKey === getTodayKey());
+	state.totalSecondsToday = todayRecord ? Number(todayRecord.totalSeconds) || 0 : 0;
+
 	bindPageNavigation(state, dom);
 	renderUsage(dom.appUsageContainer, FALLBACK_APPS);
+	renderAnalytics(state, dom);
 	initializeUsageSync(state, dom);
 	initializeTrackingState(state, dom);
 	initializeStartupState(state, dom);
@@ -114,14 +127,6 @@ document.addEventListener("DOMContentLoaded", () => {
 		if (result && typeof result.hide_on_close === "boolean") {
 			applyCloseBehaviorStatus(result.hide_on_close, state, dom);
 		}
-	});
-
-	dom.titleHideBtn?.addEventListener("click", () => {
-		invokeTauri("hide_to_tray");
-	});
-
-	dom.titleQuitBtn?.addEventListener("click", () => {
-		invokeTauri("quit_app");
 	});
 
 	dom.musicToggleBtn?.addEventListener("click", async () => {
@@ -242,6 +247,177 @@ async function initializeUsageSync(state, dom) {
 	}
 }
 
+function loadAnalyticsArchive() {
+	const raw = localStorage.getItem(ANALYTICS_STORAGE_KEY);
+	if (!raw) return { days: [], lastSnapshot: null };
+
+	try {
+		const archive = normalizeAnalyticsArchive(JSON.parse(raw));
+		const trimmed = trimAnalyticsArchive(archive);
+		saveAnalyticsArchive(trimmed);
+		return trimmed;
+	} catch (error) {
+		console.warn("Could not parse analytics archive:", error);
+		return { days: [], lastSnapshot: null };
+	}
+}
+
+function saveAnalyticsArchive(archive) {
+	localStorage.setItem(ANALYTICS_STORAGE_KEY, JSON.stringify(archive));
+}
+
+function normalizeAnalyticsArchive(archive) {
+	const days = Array.isArray(archive?.days) ? archive.days : [];
+	return {
+		days: days
+			.map((entry) => normalizeDayRecord(entry))
+			.filter(Boolean)
+			.sort((left, right) => left.dateKey.localeCompare(right.dateKey))
+			.slice(-ANALYTICS_WINDOW_DAYS),
+		lastSnapshot: normalizeSnapshotRecord(archive?.lastSnapshot)
+	};
+}
+
+function trimAnalyticsArchive(archive, referenceDate = new Date()) {
+	const windowStart = new Date(referenceDate);
+	windowStart.setHours(0, 0, 0, 0);
+	windowStart.setDate(windowStart.getDate() - (ANALYTICS_WINDOW_DAYS - 1));
+	const windowStartKey = getTodayKey(windowStart);
+
+	const days = archive.days
+		.filter((day) => day.dateKey >= windowStartKey)
+		.sort((left, right) => left.dateKey.localeCompare(right.dateKey));
+
+	const lastSnapshot = archive.lastSnapshot && archive.lastSnapshot.dateKey >= windowStartKey
+		? archive.lastSnapshot
+		: null;
+
+	return {
+		days,
+		lastSnapshot
+	};
+}
+
+function normalizeDayRecord(day) {
+	if (!day?.dateKey) return null;
+	return {
+		dateKey: String(day.dateKey),
+		weekday: day.weekday || getWeekdayLabel(new Date(`${day.dateKey}T00:00:00`)),
+		displayDate: day.displayDate || formatLongDate(day.dateKey),
+		totalSeconds: Number(day.totalSeconds) || 0,
+		apps: normalizeAppMap(day.apps)
+	};
+}
+
+function normalizeSnapshotRecord(snapshot) {
+	if (!snapshot?.dateKey) return null;
+	return {
+		dateKey: String(snapshot.dateKey),
+		totalSeconds: Number(snapshot.totalSeconds) || 0,
+		apps: normalizeAppMap(snapshot.apps)
+	};
+}
+
+function normalizeAppMap(apps) {
+	if (Array.isArray(apps)) {
+		return apps.reduce((accumulator, app) => {
+			if (!app?.name) return accumulator;
+			accumulator[app.name] = Number(app.seconds) || 0;
+			return accumulator;
+		}, {});
+	}
+
+	if (apps && typeof apps === "object") {
+		return Object.entries(apps).reduce((accumulator, [name, seconds]) => {
+			accumulator[name] = Number(seconds) || 0;
+			return accumulator;
+		}, {});
+	}
+
+	return {};
+}
+
+function getTodayKey(referenceDate = new Date()) {
+	const year = referenceDate.getFullYear();
+	const month = String(referenceDate.getMonth() + 1).padStart(2, "0");
+	const day = String(referenceDate.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+}
+
+function getWeekdayLabel(referenceDate) {
+	return referenceDate.toLocaleDateString([], { weekday: "long" });
+}
+
+function formatLongDate(dateKey) {
+	const date = new Date(`${dateKey}T00:00:00`);
+	return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
+function addOrUpdateDay(archive, dateKey) {
+	let day = archive.days.find((entry) => entry.dateKey === dateKey);
+	if (!day) {
+		day = {
+			dateKey,
+			weekday: getWeekdayLabel(new Date(`${dateKey}T00:00:00`)),
+			displayDate: formatLongDate(dateKey),
+			totalSeconds: 0,
+			apps: {}
+		};
+		archive.days.push(day);
+	}
+	return day;
+}
+
+function calculateAppDeltas(currentApps, previousApps) {
+	const deltas = {};
+	const appNames = new Set([...Object.keys(currentApps), ...Object.keys(previousApps)]);
+	for (const name of appNames) {
+		const delta = Math.max(0, (Number(currentApps[name]) || 0) - (Number(previousApps[name]) || 0));
+		if (delta > 0) deltas[name] = delta;
+	}
+	return deltas;
+}
+
+function mergeAppDeltas(target, deltas) {
+	for (const [name, seconds] of Object.entries(deltas)) {
+		target[name] = (Number(target[name]) || 0) + seconds;
+	}
+}
+
+function updateAnalyticsArchiveFromSnapshot(snapshot, state) {
+	const archive = normalizeAnalyticsArchive(state.analyticsArchive);
+	const todayKey = getTodayKey();
+	const currentApps = normalizeAppMap(snapshot.apps);
+	const currentTotal = Number(snapshot.total_seconds) || 0;
+	const previousSnapshot = normalizeSnapshotRecord(archive.lastSnapshot);
+	const day = addOrUpdateDay(archive, todayKey);
+
+	let deltaTotal = currentTotal;
+	let deltaApps = currentApps;
+
+	if (previousSnapshot) {
+		if (currentTotal < previousSnapshot.totalSeconds) {
+			deltaTotal = currentTotal;
+			deltaApps = currentApps;
+		} else {
+			deltaTotal = Math.max(0, currentTotal - previousSnapshot.totalSeconds);
+			deltaApps = calculateAppDeltas(currentApps, previousSnapshot.apps);
+		}
+	}
+
+	day.totalSeconds += deltaTotal;
+	mergeAppDeltas(day.apps, deltaApps);
+	archive.lastSnapshot = {
+		dateKey: todayKey,
+		totalSeconds: currentTotal,
+		apps: currentApps
+	};
+	const trimmed = trimAnalyticsArchive(archive);
+state.totalSecondsToday = day.totalSeconds;
+state.analyticsArchive = trimmed;
+saveAnalyticsArchive(trimmed);    
+}
+
 function renderUsage(container, usageItems) {
 	if (!container) return;
 	container.innerHTML = "";
@@ -283,16 +459,26 @@ function renderUsage(container, usageItems) {
 	});
 }
 
+function showFocusToast(dom) {
+  if (!dom.focusToast) return;
+  dom.focusToast.classList.remove("hidden");
+  requestAnimationFrame(() => dom.focusToast.classList.add("show"));
+  setTimeout(() => {
+    dom.focusToast.classList.remove("show");
+    setTimeout(() => dom.focusToast.classList.add("hidden"), 300);
+  }, 3500);
+}
+
 function tickApp(state, dom) {
-	if (state.focusTimeLeft % 15 === 0) {
-		updateClockAndGreeting(dom);
-	}
+	if (state.isFocusing && state.focusTimeLeft % 15 === 0) {
+    updateClockAndGreeting(dom);
+}
 
 	if (state.isFocusing) {
 		state.focusTimeLeft = Math.max(0, state.focusTimeLeft - 1);
 		if (state.focusTimeLeft === 0) {
 			state.isFocusing = false;
-			alert("Focus session complete! Great job.");
+			showFocusToast(dom);
 			state.focusTimeLeft = 25 * SECONDS_PER_MINUTE;
 		}
 	}
@@ -320,9 +506,9 @@ function tickApp(state, dom) {
 }
 
 function renderTime(state, dom) {
-	if (dom.sessionTimer) {
-		dom.sessionTimer.textContent = formatClockDuration(state.totalSecondsToday);
-	}
+	// if (dom.sessionTimer) {
+	// 	dom.sessionTimer.textContent = formatClockDuration(state.totalSecondsToday);
+	// }
 
 	const totalHours = Math.floor(state.totalSecondsToday / 3600);
 	const totalMins = Math.floor((state.totalSecondsToday % 3600) / SECONDS_PER_MINUTE);
@@ -344,10 +530,10 @@ async function refreshUsageSnapshot(state, dom) {
 }
 
 function applyUsageSnapshot(snapshot, state, dom) {
-	state.totalSecondsToday = Number(snapshot.total_seconds) || 0;
 	state.currentApp = snapshot.current_app || "Unknown";
 	state.topApp = snapshot.top_app || "Unknown";
 	state.usageApps = Array.isArray(snapshot.apps) ? snapshot.apps : [];
+	updateAnalyticsArchiveFromSnapshot(snapshot, state);
 	if (typeof snapshot.tracking_enabled === "boolean") {
 		applyTrackingStatus(snapshot.tracking_enabled, state, dom);
 	}
@@ -455,31 +641,78 @@ function bindPageNavigation(state, dom) {
 }
 
 function renderAnalytics(state, dom) {
-	if (!dom.analyticsChart || !dom.analyticsList) return;
+	if (!dom.analyticsChart || !dom.analyticsList || !dom.analyticsDays) return;
 
-	const apps = Array.isArray(state.usageApps) && state.usageApps.length > 0
-		? state.usageApps
-		: FALLBACK_APPS;
+	const archive = normalizeAnalyticsArchive(state.analyticsArchive);
+	state.analyticsArchive = archive;
+	const days = archive.days.slice().sort((left, right) => left.dateKey.localeCompare(right.dateKey));
+	const totalSeconds = days.reduce((sum, day) => sum + (Number(day.totalSeconds) || 0), 0);
+	const averageSeconds = days.length ? Math.round(totalSeconds / days.length) : 0;
+	const mostUsedDay = days.length ? days.reduce((best, day) => ((Number(day.totalSeconds) || 0) > (Number(best.totalSeconds) || 0) ? day : best), days[0]) : null;
+	const leastUsedDay = days.length ? days.reduce((worst, day) => ((Number(day.totalSeconds) || 0) < (Number(worst.totalSeconds) || 0) ? day : worst), days[0]) : null;
+	const appTotals = aggregateAppTotals(days);
+	const topApps = Object.entries(appTotals)
+		.sort((left, right) => right[1] - left[1])
+		.slice(0, 5)
+		.map(([name, seconds]) => ({ name, seconds, percent: totalSeconds ? (seconds / totalSeconds) * 100 : 0 }));
 
-	const chartItems = apps.slice(0, 6);
-	dom.analyticsChart.innerHTML = "";
-	dom.analyticsList.innerHTML = "";
+	if (dom.analyticsRangeLabel) dom.analyticsRangeLabel.textContent = `${days.length}/7 days`;
+	if (dom.analyticsTodayLabel) dom.analyticsTodayLabel.textContent = getWeekdayLabel(new Date());
+	if (dom.analyticsTodayDate) dom.analyticsTodayDate.textContent = formatLongDate(getTodayKey());
+	if (dom.analyticsAverageTime) dom.analyticsAverageTime.textContent = formatDurationShort(averageSeconds);
+	if (dom.analyticsMostDay) dom.analyticsMostDay.textContent = mostUsedDay ? `${mostUsedDay.weekday} (${mostUsedDay.displayDate})` : "-";
+	if (dom.analyticsMostDayTime) dom.analyticsMostDayTime.textContent = mostUsedDay ? formatDurationShort(Number(mostUsedDay.totalSeconds) || 0) : "-";
+	if (dom.analyticsLeastDay) dom.analyticsLeastDay.textContent = leastUsedDay ? `${leastUsedDay.weekday} (${leastUsedDay.displayDate})` : "-";
+	if (dom.analyticsLeastDayTime) dom.analyticsLeastDayTime.textContent = leastUsedDay ? formatDurationShort(Number(leastUsedDay.totalSeconds) || 0) : "-";
+	if (dom.analyticsRecordCount) dom.analyticsRecordCount.textContent = `${days.length} / 7 days stored`;
 
-	chartItems.forEach((item) => {
-		const percent = Math.max(0, Math.min(100, Number(item.percent) || 0));
+	renderAnalyticsBars(dom.analyticsChart, days);
+	renderTopApps(dom.analyticsList, topApps);
+	renderArchiveRows(dom.analyticsDays, days);
+}
+
+function aggregateAppTotals(days) {
+	return days.reduce((totals, day) => {
+		for (const [name, seconds] of Object.entries(day.apps || {})) {
+			totals[name] = (Number(totals[name]) || 0) + (Number(seconds) || 0);
+		}
+		return totals;
+	}, {});
+}
+
+function renderAnalyticsBars(container, days) {
+	if (!container) return;
+	container.innerHTML = "";
+	const maxSeconds = Math.max(1, ...days.map((day) => Number(day.totalSeconds) || 0));
+	days.forEach((day) => {
+		const percent = Math.max(0, Math.min(100, ((Number(day.totalSeconds) || 0) / maxSeconds) * 100));
 		const row = document.createElement("div");
 		row.className = "analytics-bar";
 		row.innerHTML = `
 			<div class="analytics-bar-head">
-				<span>${item.name}</span>
-				<span>${formatDurationShort(Number(item.seconds) || 0)}</span>
+				<span>${day.weekday}</span>
+				<span>${formatDurationShort(Number(day.totalSeconds) || 0)}</span>
 			</div>
-			<div class="analytics-bar-track"><div class="analytics-bar-fill" data-fill="${percent}"></div></div>
+			<div class="analytics-day-meta">${day.displayDate}</div>
+			<div class="analytics-day-track"><div class="analytics-day-fill" data-fill="${percent}"></div></div>
 		`;
-		dom.analyticsChart.appendChild(row);
+		container.appendChild(row);
 	});
+	requestAnimationFrame(() => {
+		container.querySelectorAll(".analytics-day-fill").forEach((bar) => {
+			bar.style.width = `${bar.getAttribute("data-fill") || "0"}%`;
+		});
+	});
+}
 
-	chartItems.forEach((item, index) => {
+function renderTopApps(container, apps) {
+	if (!container) return;
+	container.innerHTML = "";
+	if (apps.length === 0) {
+		container.innerHTML = '<div class="analytics-list-item"><div><strong>No data yet</strong><div class="settings-subtitle">Track activity locally for seven days to unlock rankings</div></div><div class="tag">Offline</div></div>';
+		return;
+	}
+	apps.forEach((item, index) => {
 		const row = document.createElement("div");
 		row.className = "analytics-list-item";
 		row.innerHTML = `
@@ -489,18 +722,37 @@ function renderAnalytics(state, dom) {
 			</div>
 			<div class="tag">${Math.round(Number(item.percent) || 0)}%</div>
 		`;
-		dom.analyticsList.appendChild(row);
+		container.appendChild(row);
 	});
+}
 
+function renderArchiveRows(container, days) {
+	if (!container) return;
+	container.innerHTML = "";
+	if (days.length === 0) {
+		container.innerHTML = '<div class="analytics-list-item"><div><strong>No archive yet</strong><div class="settings-subtitle">Daily usage records will appear here once tracking runs</div></div><div class="tag">7 day window</div></div>';
+		return;
+	}
+	const maxSeconds = Math.max(1, ...days.map((day) => Number(day.totalSeconds) || 0));
+	days.forEach((day) => {
+		const percent = Math.max(0, Math.min(100, ((Number(day.totalSeconds) || 0) / maxSeconds) * 100));
+		const row = document.createElement("div");
+		row.className = "analytics-day-row";
+		row.innerHTML = `
+			<div class="analytics-day-head">
+				<span>${day.weekday}</span>
+				<span>${formatDurationShort(Number(day.totalSeconds) || 0)}</span>
+			</div>
+			<div class="analytics-day-meta">${day.displayDate}</div>
+			<div class="analytics-day-track"><div class="analytics-day-fill" data-fill="${percent}"></div></div>
+		`;
+		container.appendChild(row);
+	});
 	requestAnimationFrame(() => {
-		dom.analyticsChart.querySelectorAll(".analytics-bar-fill").forEach((bar) => {
-			const fill = bar.getAttribute("data-fill") || "0";
-			bar.style.width = `${fill}%`;
+		container.querySelectorAll(".analytics-day-fill").forEach((bar) => {
+			bar.style.width = `${bar.getAttribute("data-fill") || "0"}%`;
 		});
 	});
-
-	if (dom.analyticsTopApp) dom.analyticsTopApp.textContent = state.topApp || "Unknown";
-	if (dom.analyticsTotalTime) dom.analyticsTotalTime.textContent = formatClockDuration(state.totalSecondsToday);
 }
 
 async function invokeTauri(command, args = {}) {

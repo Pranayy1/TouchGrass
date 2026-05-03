@@ -1,6 +1,8 @@
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::{
     collections::HashMap,
+    fs,
+    path::PathBuf,
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -11,6 +13,7 @@ use tauri::{
     AppHandle, Emitter, Manager, State, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
+use chrono::Local;
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::{
@@ -22,13 +25,14 @@ use windows_sys::Win32::{
     UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
 };
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 struct TrackerState {
     total_millis: u64,
     current_app: String,
     per_app_millis: HashMap<String, u64>,
     tracking_enabled: bool,
     hide_on_close: bool,
+    day_key: String,
 }
 
 #[derive(Clone)]
@@ -65,50 +69,36 @@ struct CloseBehaviorStatus {
     hide_on_close: bool,
 }
 
+fn current_day_key() -> String {
+    Local::now().date_naive().format("%Y-%m-%d").to_string()
+}
+
+fn reset_daily_state(state: &mut TrackerState) {
+    state.total_millis = 0;
+    state.per_app_millis.clear();
+    state.current_app = if state.tracking_enabled {
+        "Waiting for user app".to_string()
+    } else {
+        "Tracking paused".to_string()
+    };
+    state.day_key = current_day_key();
+}
+
+fn ensure_daily_rollover(state: &mut TrackerState) -> bool {
+    let today = current_day_key();
+    if state.day_key != today {
+        reset_daily_state(state);
+        return true;
+    }
+
+    false
+}
+
 #[tauri::command]
 fn get_usage_snapshot(state: State<'_, TrackerHandle>) -> UsageSnapshot {
-    let guard = match state.0.lock() {
-        Ok(g) => g,
-        Err(_) => {
-            return UsageSnapshot {
-                total_seconds: 0,
-                current_app: "Unknown".to_string(),
-                top_app: "Unknown".to_string(),
-                tracking_enabled: false,
-                apps: vec![],
-            }
-        }
-    };
-
-    let total = millis_to_seconds(guard.total_millis);
-    let mut items: Vec<UsageEntry> = guard
-        .per_app_millis
-        .iter()
-        .map(|(name, seconds)| UsageEntry {
-            name: name.clone(),
-            seconds: millis_to_seconds(*seconds),
-            percent: if total == 0 {
-                0.0
-            } else {
-                (millis_to_seconds(*seconds) as f64 / total as f64) * 100.0
-            },
-        })
-        .collect();
-
-    items.sort_by(|a, b| b.seconds.cmp(&a.seconds));
-    items.truncate(8);
-
-    let top_app = items
-        .first()
-        .map(|entry| entry.name.clone())
-        .unwrap_or_else(|| "Unknown".to_string());
-
-    UsageSnapshot {
-        total_seconds: total,
-        current_app: guard.current_app.clone(),
-        top_app,
-        tracking_enabled: guard.tracking_enabled,
-        apps: items,
+    match state.0.lock() {
+        Ok(guard) => snapshot_from_state(&guard),
+        Err(poisoned) => snapshot_from_state(&poisoned.into_inner()),
     }
 }
 
@@ -187,9 +177,15 @@ fn get_close_behavior(state: State<'_, TrackerHandle>) -> CloseBehaviorStatus {
 }
 
 #[tauri::command]
-fn set_hide_on_close(enabled: bool, state: State<'_, TrackerHandle>) -> CloseBehaviorStatus {
+fn set_hide_on_close(
+    enabled: bool,
+    state: State<'_, TrackerHandle>,
+    app: AppHandle,
+) -> CloseBehaviorStatus {
     if let Ok(mut tracker) = state.0.lock() {
         tracker.hide_on_close = enabled;
+
+        let _ = save_state(&tracker, &app);
     }
 
     CloseBehaviorStatus {
@@ -239,56 +235,80 @@ fn snapshot_from_state(state: &TrackerState) -> UsageSnapshot {
 
 fn track_foreground_apps(shared: Arc<Mutex<TrackerState>>, app: AppHandle) {
     thread::spawn(move || {
-        let mut sampling_ms = 1800u64;
+        let mut sampling_ms = 2500u64;
         let mut last_tick = Instant::now();
         let mut last_emit = Instant::now();
+        let mut last_save = Instant::now();
         let mut last_app = String::new();
+        let mut tick_count = 0u32;
 
         loop {
             thread::sleep(Duration::from_millis(sampling_ms));
             let now = Instant::now();
             let elapsed = now.saturating_duration_since(last_tick).as_millis() as u64;
             last_tick = now;
+            tick_count += 1;
 
-            let active = detect_active_user_app();
-            let mut changed = false;
-            let mut should_emit = false;
+            // Only call expensive Windows API every 3rd tick, reuse last_app for time accumulation
+            let detected_active = if tick_count % 3 == 0 {
+                detect_active_user_app()
+            } else {
+                None
+            };
 
             if let Ok(mut state) = shared.lock() {
+                let rolled_over = ensure_daily_rollover(&mut state);
+                if rolled_over {
+                    last_app.clear();
+                }
+
                 if !state.tracking_enabled {
                     state.current_app = "Tracking paused".to_string();
-                    sampling_ms = 7000;
-                } else if let Some(active_name) = active {
-                    if active_name != last_app {
-                        changed = true;
-                        last_app = active_name.clone();
-                        sampling_ms = 900;
+                    sampling_ms = 8000;
+                } else if let Some(active_name) = detected_active.or_else(|| {
+                    if last_app.is_empty() {
+                        None
                     } else {
-                        sampling_ms = (sampling_ms + 250).min(4500);
+                        Some(last_app.clone())
+                    }
+                }) {
+                    let changed = rolled_over || active_name != last_app;
+                    let credited_app = if changed && !last_app.is_empty() {
+                        last_app.clone()
+                    } else {
+                        active_name.clone()
+                    };
+
+                    if active_name != last_app {
+                        last_app = active_name.clone();
+                        sampling_ms = 1200;
+                        tick_count = 0;
+                    } else {
+                        sampling_ms = (sampling_ms + 180).min(5000);
                     }
 
                     state.current_app = active_name.clone();
-                    state.total_millis += elapsed;
-                    let counter = state.per_app_millis.entry(active_name).or_insert(0);
-                    *counter += elapsed;
-                } else {
+                    if !credited_app.is_empty() {
+                        state.total_millis += elapsed;
+                        let counter = state.per_app_millis.entry(credited_app).or_insert(0);
+                        *counter += elapsed;
+                    }
+                  
+
+                    if changed || last_emit.elapsed() >= Duration::from_secs(8) {
+                        let snapshot = snapshot_from_state(&state);
+                        let _ = app.emit("usage://snapshot", snapshot);
+                        last_emit = Instant::now();
+                    }
+                } else if tick_count % 3 == 0 {
                     state.current_app = "No tracked user app".to_string();
-                    sampling_ms = (sampling_ms + 350).min(6500);
+                    sampling_ms = (sampling_ms + 400).min(7000);
                 }
 
-                if changed || last_emit.elapsed() >= Duration::from_secs(5) {
-                    let snapshot = snapshot_from_state(&state);
-                    let _ = app.emit("usage://snapshot", snapshot);
-                    last_emit = Instant::now();
-                    should_emit = true;
-                }
-            }
-
-            if !should_emit && last_emit.elapsed() >= Duration::from_secs(10) {
-                if let Ok(state) = shared.lock() {
-                    let snapshot = snapshot_from_state(&state);
-                    let _ = app.emit("usage://snapshot", snapshot);
-                    last_emit = Instant::now();
+                // Save state every 30 seconds
+                if last_save.elapsed() >= Duration::from_secs(30) {
+                    let _ = save_state(&state, &app);
+                    last_save = Instant::now();
                 }
             }
         }
@@ -301,6 +321,7 @@ fn set_tracking_enabled_internal(
     app: &AppHandle,
 ) -> TrackingStatus {
     if let Ok(mut state) = tracker.lock() {
+        ensure_daily_rollover(&mut state);
         state.tracking_enabled = enabled;
         if !enabled {
             state.current_app = "Tracking paused".to_string();
@@ -313,6 +334,7 @@ fn set_tracking_enabled_internal(
             },
         );
         let _ = app.emit("usage://snapshot", snapshot_from_state(&state));
+        let _ = save_state(&state, app);
     }
 
     TrackingStatus {
@@ -336,14 +358,9 @@ fn reveal_main_window(app: &AppHandle) {
 
 fn reset_usage_data(tracker: &Arc<Mutex<TrackerState>>, app: &AppHandle) {
     if let Ok(mut state) = tracker.lock() {
-        state.total_millis = 0;
-        state.per_app_millis.clear();
-        state.current_app = if state.tracking_enabled {
-            "Waiting for user app".to_string()
-        } else {
-            "Tracking paused".to_string()
-        };
+        reset_daily_state(&mut state);
         let _ = app.emit("usage://snapshot", snapshot_from_state(&state));
+        let _ = save_state(&state, app);
     }
 }
 
@@ -367,8 +384,50 @@ fn setup_main_window_behavior(app: &AppHandle, tracker: Arc<Mutex<TrackerState>>
     }
 }
 
+fn get_state_file_path(app: &AppHandle) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("./data"))
+        .join("touchgrass_state.json")
+}
+
+fn save_state(state: &TrackerState, app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let path = get_state_file_path(app);
+    
+    // Create parent directories if they don't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    
+    let json = serde_json::to_string_pretty(state)?;
+    fs::write(&path, json)?;
+    Ok(())
+}
+
+fn load_state(app: &AppHandle) -> Result<TrackerState, Box<dyn std::error::Error>> {
+    let path = get_state_file_path(app);
+    
+    if !path.exists() {
+       let mut state = TrackerState::default();
+state.hide_on_close = true;
+state.tracking_enabled = true;   // set this first
+reset_daily_state(&mut state);   // now current_app = "Waiting for user app" ✅
+        return Ok(state);
+    }
+    
+    let json = fs::read_to_string(&path)?;
+    let mut state: TrackerState = serde_json::from_str(&json)?;
+    if state.day_key.is_empty() {
+        reset_daily_state(&mut state);
+    } else {
+        ensure_daily_rollover(&mut state);
+    }
+
+    Ok(state)
+}
+
 fn setup_tray(app: &AppHandle, tracker: Arc<Mutex<TrackerState>>) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "tray_show", "Open Arise", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "tray_show", "Open TouchGrass", true, None::<&str>)?;
     let stop_tracking =
         MenuItem::with_id(app, "tray_stop_tracking", "Stop Tracking", true, None::<&str>)?;
     let start_tracking =
@@ -382,23 +441,36 @@ fn setup_tray(app: &AppHandle, tracker: Arc<Mutex<TrackerState>>) -> tauri::Resu
     )?;
 
     let tracker_for_menu = tracker.clone();
-    TrayIconBuilder::new()
-        .menu(&menu)
-        .on_menu_event(move |app, event| match event.id().as_ref() {
-            "tray_show" => reveal_main_window(app),
-            "tray_stop_tracking" => {
-                let _ = set_tracking_enabled_internal(&tracker_for_menu, false, app);
-            }
-            "tray_start_tracking" => {
-                let _ = set_tracking_enabled_internal(&tracker_for_menu, true, app);
-            }
-            "tray_reset_data" => {
-                reset_usage_data(&tracker_for_menu, app);
-            }
-            "tray_close" => app.exit(0),
-            _ => {}
-        })
-        .build(app)?;
+    
+ let mut builder = TrayIconBuilder::new()
+    .menu(&menu)
+    .tooltip("TouchGrass")
+    .on_tray_icon_event(|tray, event| {
+        if let tauri::tray::TrayIconEvent::Click {
+            button: tauri::tray::MouseButton::Left, ..
+        } = event {
+            reveal_main_window(tray.app_handle());
+        }
+    })
+    .on_menu_event(move |app, event| match event.id().as_ref() {
+        "tray_show" => reveal_main_window(app),
+        "tray_stop_tracking" => {
+            let _ = set_tracking_enabled_internal(&tracker_for_menu, false, app);
+        }
+        "tray_start_tracking" => {
+            let _ = set_tracking_enabled_internal(&tracker_for_menu, true, app);
+        }
+        "tray_reset_data" => {
+            reset_usage_data(&tracker_for_menu, app);
+        }
+        "tray_close" => app.exit(0),
+        _ => {}
+    });
+
+if let Some(icon) = app.default_window_icon().cloned() {
+    builder = builder.icon(icon);
+}
+builder.build(app)?;
 
     Ok(())
 }
@@ -517,26 +589,38 @@ pub fn run() {
     let tracker = Arc::new(Mutex::new(TrackerState {
         tracking_enabled: true,
         hide_on_close: true,
+        day_key: current_day_key(),
         ..Default::default()
     }));
 
     tauri::Builder::default()
         .manage(TrackerHandle(tracker.clone()))
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let tracker = app.state::<TrackerHandle>().0.clone();
+
+            if let Ok(mut state) = tracker.lock() {
+                if let Ok(loaded_state) = load_state(&handle) {
+                    *state = loaded_state;
+                }
+
+                state.current_app = if state.tracking_enabled {
+    "Waiting for user app".to_string()
+} else {
+    "Tracking paused".to_string()
+};
+            }
+
+            setup_main_window_behavior(&handle, tracker.clone());
+            setup_tray(&handle, tracker.clone())?;
+            track_foreground_apps(tracker, handle);
+            Ok(())
+        })
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            let handle = app.handle().clone();
-            let tracker = app.state::<TrackerHandle>().0.clone();
-
-            setup_main_window_behavior(&handle, tracker.clone());
-            setup_tray(&handle, tracker.clone())?;
-            track_foreground_apps(tracker, handle);
-
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             get_usage_snapshot,
             get_tracking_status,
