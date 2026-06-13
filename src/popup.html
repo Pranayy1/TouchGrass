@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: tauri: asset:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset:; font-src 'self';" />
+  <title>Focus</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      display: block;
+    }
+
+    .popup-shell {
+      box-sizing: border-box;
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 24px;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 8px 7px 12px;
+      border-radius: 12px;
+      background: rgba(12, 18, 31, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      color: #ffffff;
+      -webkit-app-region: drag;
+    }
+
+    .timer {
+      min-width: 0;
+      font-size: 21px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-align: center;
+    }
+
+    .close-button {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.8);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0;
+      -webkit-app-region: no-drag;
+    }
+
+    .close-button:hover {
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+    }
+
+    .close-button:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.72);
+      outline-offset: 2px;
+    }
+
+    [data-tauri-drag-region] {
+      -webkit-app-region: drag;
+    }
+  </style>
+</head>
+<body>
+  <div id="popup-shell" class="popup-shell" data-tauri-drag-region>
+    <div id="timer" class="timer" data-tauri-drag-region>00:00</div>
+    <button id="close-popup" class="close-button" type="button" aria-label="Close timer popup">&times;</button>
+  </div>
+  <script type="module" src="./popup.js"></script>
+</body>
+</html>

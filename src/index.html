@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: tauri: asset:; connect-src 'self' tauri:; script-src 'self'; style-src 'self'; img-src 'self' data: asset:; media-src 'self' data: asset:; font-src 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: tauri: asset:; connect-src 'self' tauri: ipc: http://ipc.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: asset:; media-src 'self' data: asset: blob:; font-src 'self';" />
   <title>TouchGrass - Digital Wellbeing</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -44,8 +44,6 @@
         <p class="menu-label">Menu</p>
         <button class="menu-btn active" data-page-btn="dashboard"><svg class="icon"><use href="#i-dashboard"></use></svg><span>Dashboard</span></button>
         <button class="menu-btn" data-page-btn="analytics"><svg class="icon"><use href="#i-chart"></use></svg><span>Analytics</span></button>
-        <button class="menu-btn" data-page-btn="music"><svg class="icon"><use href="#i-target"></use></svg><span>Calm Music</span></button>
-
         <p class="menu-label spaced">Preferences</p>
         <button class="menu-btn" data-page-btn="settings"><svg class="icon"><use href="#i-settings"></use></svg><span>Settings</span></button>
       </nav>
@@ -67,7 +65,10 @@
         </div>
         <div class="header-tools">
           <div class="time-pill"><svg class="icon"><use href="#i-clock"></use></svg><span id="actual-time">--:--</span></div>
-          <button class="icon-btn" aria-label="Notifications"><svg class="icon"><use href="#i-bell"></use></svg></button>
+          <button id="notification-btn" class="icon-btn" aria-label="Notifications">
+            <svg class="icon"><use href="#i-bell"></use></svg>
+            <span id="notification-badge" class="notification-badge hidden" aria-hidden="true"></span>
+          </button>
           <button class="icon-btn" aria-label="Calendar"><svg class="icon"><use href="#i-calendar"></use></svg></button>
         </div>
       </section>
@@ -96,16 +97,6 @@
                 <span class="summary-pill-value" id="tracking-inline">On</span>
               </div>
             </div>
-          </div>
-        </article>
-
-        <article class="card focus-card">
-          <h3><svg class="icon"><use href="#i-timer"></use></svg>Focus Mode</h3>
-          <p id="focus-time-display" class="focus-time">25:00</p>
-          <p class="focus-subtitle">Deep work session</p>
-          <div class="focus-actions">
-            <button id="focus-btn" class="btn btn-primary">Start Focus</button>
-            <button id="focus-reset-btn" class="btn btn-soft" aria-label="Reset focus timer"><svg class="icon"><use href="#i-rotate"></use></svg></button>
           </div>
         </article>
 
@@ -178,33 +169,6 @@
         </article>
       </section>
 
-      <section class="page-view" data-page="music">
-        <div class="music-layout">
-          <article class="card music-card">
-            <div class="card-head">
-              <h3>Calm Music</h3>
-              <span class="tag">Offline audio</span>
-            </div>
-            <div class="music-hero">
-              <div class="music-orb"></div>
-              <div>
-                <h2>Soft Focus Ambient</h2>
-                <p>Gentle background audio for low-distraction work.</p>
-              </div>
-            </div>
-            <audio id="calm-audio" src="./audio.mp3" loop preload="none"></audio>
-            <div class="music-controls">
-              <button id="music-toggle-btn" class="btn btn-primary">Play</button>
-              <button id="music-stop-btn" class="btn btn-soft">Stop</button>
-            </div>
-            <div class="music-meta">
-              <span>Volume</span>
-              <input id="music-volume" type="range" min="0" max="1" step="0.05" value="0.35">
-            </div>
-          </article>
-        </div>
-      </section>
-
       <section class="page-view" data-page="settings">
         <div class="settings-page-layout">
           <article class="card settings-card settings-card-wide">
@@ -237,6 +201,14 @@
                 </div>
                 <button id="close-behavior-toggle-btn" class="btn btn-toggle on" type="button" aria-label="Toggle hide on close">Hide On Close</button>
               </div>
+
+              <div class="settings-row">
+                <div>
+                  <p class="settings-title">Hourly Tray Notifications</p>
+                  <p class="settings-subtitle" id="hourly-notifications-status-text">Hourly background notifications are enabled</p>
+                </div>
+                <button id="hourly-notifications-toggle-btn" class="btn btn-toggle on" type="button" aria-label="Toggle hourly notifications">Hourly ON</button>
+              </div>
             </div>
           </article>
         </div>
@@ -256,6 +228,31 @@
       <button id="start-breathe-btn" class="btn btn-primary block">Start Exercise</button>
     </div>
   </div>
+
+  <div id="focus-popup" class="focus-popup hidden" role="status" aria-live="polite" aria-label="Focus timer">
+    <div class="focus-popup-main">
+      <div class="focus-popup-label">
+        <svg class="icon"><use href="#i-timer"></use></svg>
+        <span>Focus Timer</span>
+      </div>
+      <div id="focus-time-display" class="focus-popup-time">25:00</div>
+    </div>
+      <div class="focus-popup-controls">
+      <select id="focus-minute-select" class="focus-popup-select" aria-label="Focus duration preset">
+        <option value="15">15 min</option>
+        <option value="25" selected>25 min</option>
+        <option value="45">45 min</option>
+        <option value="60">60 min</option>
+        <option value="custom">Custom</option>
+      </select>
+      <input id="focus-minute-custom" class="focus-popup-input hidden" type="number" min="1" max="240" value="25" aria-label="Custom focus minutes">
+      <button id="focus-start-btn" class="btn btn-primary" type="button">Start</button>
+      <button id="focus-popout-btn" class="btn btn-light" type="button" aria-label="Pop out timer">Pop Out</button>
+      <button id="focus-reset-btn" class="btn btn-soft" type="button" aria-label="Reset focus timer"><svg class="icon"><use href="#i-rotate"></use></svg></button>
+    </div>
+  </div>
+
+  <div id="usage-alert-toast" class="usage-alert-toast hidden" role="status" aria-live="polite"></div>
   
 
   <script type="module" src="./main.js"></script>

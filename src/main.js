@@ -1,7 +1,10 @@
 const SECONDS_PER_MINUTE = 60;
 const DAILY_GOAL_SECONDS = 8 * 60 * 60;
 const ANALYTICS_STORAGE_KEY = "touchgrass_analytics_v1";
+const FOCUS_TIMER_STORAGE_KEY = "touchgrass_focus_remaining_seconds";
+const FOCUS_TIMER_RUNNING_STORAGE_KEY = "touchgrass_focus_is_running";
 const ANALYTICS_WINDOW_DAYS = 7;
+const DAILY_ALERT_THRESHOLD_SECONDS = 5 * 60 * 60;
 const USAGE_FILL_CLASSES = ["code", "browser", "chat", "music"];
 const FALLBACK_APPS = [
 	{ name: "No data yet", seconds: 1, percent: 100 },
@@ -11,7 +14,13 @@ const FALLBACK_APPS = [
 ];
 
 document.addEventListener("DOMContentLoaded", () => {
+	console.log("App: DOMContentLoaded fired");
+
 	document.addEventListener("dragstart", (event) => event.preventDefault());
+
+	const isFocusPopupWindow = Boolean(window.__FOCUS_POPUP_MODE__);
+	const injectedFocusMinutes = Number(window.__FOCUS_POPUP_MINUTES__);
+	const injectedFocusRemaining = Number(window.__FOCUS_POPUP_REMAINING__);
 
 	const dom = {
 		actualTime: document.getElementById("actual-time"),
@@ -23,9 +32,11 @@ document.addEventListener("DOMContentLoaded", () => {
 		trackingStatusText: document.getElementById("tracking-status-text"),
 		startupStatusText: document.getElementById("startup-status-text"),
 		closeBehaviorStatusText: document.getElementById("close-behavior-status-text"),
+		hourlyNotificationsStatusText: document.getElementById("hourly-notifications-status-text"),
 		trackingToggleBtn: document.getElementById("tracking-toggle-btn"),
 		startupToggleBtn: document.getElementById("startup-toggle-btn"),
 		closeBehaviorToggleBtn: document.getElementById("close-behavior-toggle-btn"),
+		hourlyNotificationsToggleBtn: document.getElementById("hourly-notifications-toggle-btn"),
 		trackingSummaryText: document.getElementById("tracking-summary-text"),
 		topAppInline: document.getElementById("top-app-inline"),
 		trackingInline: document.getElementById("tracking-inline"),
@@ -41,13 +52,16 @@ document.addEventListener("DOMContentLoaded", () => {
 		analyticsChart: document.getElementById("analytics-chart"),
 		analyticsList: document.getElementById("analytics-list"),
 		analyticsDays: document.getElementById("analytics-days"),
-		musicAudio: document.getElementById("calm-audio"),
-		musicToggleBtn: document.getElementById("music-toggle-btn"),
-		musicStopBtn: document.getElementById("music-stop-btn"),
-		musicVolume: document.getElementById("music-volume"),
+		focusPopup: document.getElementById("focus-popup"),
+		focusMinuteSelect: document.getElementById("focus-minute-select"),
+		focusMinuteCustom: document.getElementById("focus-minute-custom"),
 		focusDisplay: document.getElementById("focus-time-display"),
 		focusBtn: document.getElementById("focus-btn"),
+		focusStartBtn: document.getElementById("focus-start-btn"),
+		focusPopoutBtn: document.getElementById("focus-popout-btn"),
 		focusResetBtn: document.getElementById("focus-reset-btn"),
+		notificationBtn: document.getElementById("notification-btn"),
+		notificationBadge: document.getElementById("notification-badge"),
 		modal: document.getElementById("breathe-modal"),
 		breatheCircle: document.getElementById("breathe-circle"),
 		breatheInstruction: document.getElementById("breathe-instruction"),
@@ -55,7 +69,8 @@ document.addEventListener("DOMContentLoaded", () => {
 		startBreatheBtn: document.getElementById("start-breathe-btn"),
 		openBreatheBtn: document.getElementById("open-breathe-btn"),
 		closeBreatheBtn: document.getElementById("close-breathe-btn"),
-		focusToast: document.getElementById("focus-toast")
+		focusToast: document.getElementById("focus-toast"),
+		usageAlertToast: document.getElementById("usage-alert-toast")
 	};
 
 	const state = {
@@ -63,46 +78,147 @@ document.addEventListener("DOMContentLoaded", () => {
 		currentApp: "Unknown",
 		topApp: "Unknown",
 		lastUsageSignature: "",
-		focusTimeLeft: 25 * SECONDS_PER_MINUTE,
-		isFocusing: false,
-		breatheTime: 60,
-		isBreathing: false,
-		breathePhaseSeconds: 0,
-		isInhale: true,
-		lastClockMinute: -1,
-		trackingEnabled: true,
+
+	// Removed temporary click debug listener
 		launchOnStartupEnabled: false,
 		hideOnCloseEnabled: true,
+		hourlyNotificationsEnabled: true,
 		usageApps: [],
 		analyticsArchive: loadAnalyticsArchive(),
 		activePage: "dashboard",
 		unsubscribeUsageListener: null,
-		unsubscribeTrackingListener: null
+		unsubscribeTrackingListener: null,
+		unsubscribeResetListener: null,
+		unsubscribeAlertListener: null,
+		fallbackInterval: null,
+		analyticsDirty: true,
+		lastFocusRender: -1,
+		forceFocusRender: true,
+		isPopupWindow: isFocusPopupWindow,
+		// Focus timer defaults
+		isFocusing: false,
+		focusTimeLeft: 25 * SECONDS_PER_MINUTE,
+		focusDurationMinutes: 25,
+		fiveHourAlertShown: false,
+		alertDayKey: getTodayKey(),
+		usageAlertTimer: null
 	};
 
 	const todayRecord = state.analyticsArchive.days.find((entry) => entry.dateKey === getTodayKey());
 	state.totalSecondsToday = todayRecord ? Number(todayRecord.totalSeconds) || 0 : 0;
 
+	if (isFocusPopupWindow) {
+		document.body.classList.add("popup-focus-window");
+		state.focusDurationMinutes = Number.isFinite(injectedFocusMinutes) ? Math.max(1, Math.min(240, Math.round(injectedFocusMinutes))) : 25;
+		if (Number.isFinite(injectedFocusRemaining) && injectedFocusRemaining > 0) {
+			state.focusTimeLeft = Math.max(1, Math.round(injectedFocusRemaining));
+		} else {
+			state.focusTimeLeft = state.focusDurationMinutes * SECONDS_PER_MINUTE;
+		}
+		state.isFocusing = true;
+	}
+
+	if (dom.focusMinuteCustom) {
+		dom.focusMinuteCustom.max = "240";
+	}
+
+
+
 	bindPageNavigation(state, dom);
 	renderUsage(dom.appUsageContainer, FALLBACK_APPS);
 	renderAnalytics(state, dom);
-	initializeUsageSync(state, dom);
-	initializeTrackingState(state, dom);
-	initializeStartupState(state, dom);
-	initializeCloseBehaviorState(state, dom);
+	if (!isFocusPopupWindow) {
+		initializeUsageSync(state, dom);
+		initializeTrackingState(state, dom);
+		initializeStartupState(state, dom);
+		initializeCloseBehaviorState(state, dom);
+		initializeHourlyNotificationsState(state, dom);
+	}
+
+	// show embedded popup in the main window
+	if (!isFocusPopupWindow && dom.focusPopup) dom.focusPopup.classList.remove("hidden");
+	applyFocusInputVisibility(dom);
 	updateClockAndGreeting(dom);
 	renderTime(state, dom);
-	renderFocus(state, dom.focusDisplay, dom.focusBtn);
+	renderFocus(state, dom);
 
-	dom.focusBtn?.addEventListener("click", () => {
-		state.isFocusing = !state.isFocusing;
-		renderFocus(state, dom.focusDisplay, dom.focusBtn);
+	// Start/Pause/Resume button inside the main app
+	dom.focusStartBtn?.addEventListener("click", () => {
+		if (!dom.focusStartBtn) return;
+		if (!state.isFocusing) {
+			// start or resume
+			if (state.focusTimeLeft <= 0) {
+				state.focusTimeLeft = Math.max(1, Number(state.focusDurationMinutes) || 25) * SECONDS_PER_MINUTE;
+			}
+			state.isFocusing = true;
+		} else {
+			// pause
+			state.isFocusing = false;
+		}
+		state.forceFocusRender = true;
+		renderFocus(state, dom);
+	});
+
+	// Pop Out button: only enabled when timer is running
+	dom.focusPopoutBtn?.addEventListener("click", async () => {
+		if (!state.isFocusing) {
+			const minutes = getSelectedFocusMinutes(dom);
+			state.focusDurationMinutes = minutes;
+			state.focusTimeLeft = minutes * SECONDS_PER_MINUTE;
+			state.isFocusing = true;
+		}
+
+		const remaining = Math.max(1, Math.round(state.focusTimeLeft));
+		try {
+			localStorage.setItem(FOCUS_TIMER_STORAGE_KEY, String(remaining));
+			localStorage.setItem(FOCUS_TIMER_RUNNING_STORAGE_KEY, "1");
+		} catch (error) {
+			console.warn("Could not update focus timer storage before pop out:", error);
+		}
+		state.forceFocusRender = true;
+		renderFocus(state, dom);
+		await openFocusPopup(remaining);
+	});
+
+	dom.focusMinuteSelect?.addEventListener("change", () => {
+		const minutes = getSelectedFocusMinutes(dom);
+		state.focusDurationMinutes = minutes;
+		applyFocusInputVisibility(dom);
+		if (dom.focusMinuteCustom && dom.focusMinuteSelect?.value !== "custom") {
+			dom.focusMinuteCustom.value = String(minutes);
+		}
+		if (!state.isFocusing) {
+			state.focusTimeLeft = minutes * SECONDS_PER_MINUTE;
+			state.forceFocusRender = true;
+			renderFocus(state, dom);
+		}
+	});
+
+	dom.focusMinuteCustom?.addEventListener("input", () => {
+		if (dom.focusMinuteSelect?.value !== "custom") return;
+		if (dom.focusMinuteCustom) {
+			const numericValue = Number(dom.focusMinuteCustom.value);
+			if (Number.isFinite(numericValue)) {
+				dom.focusMinuteCustom.value = String(Math.max(1, Math.min(240, Math.round(numericValue))));
+			}
+		}
+		const minutes = getSelectedFocusMinutes(dom);
+		state.focusDurationMinutes = minutes;
+		applyFocusInputVisibility(dom);
+		if (!state.isFocusing) {
+			state.focusTimeLeft = minutes * SECONDS_PER_MINUTE;
+			state.forceFocusRender = true;
+			renderFocus(state, dom);
+		}
 	});
 
 	dom.focusResetBtn?.addEventListener("click", () => {
+		const minutes = getSelectedFocusMinutes(dom);
 		state.isFocusing = false;
-		state.focusTimeLeft = 25 * SECONDS_PER_MINUTE;
-		renderFocus(state, dom.focusDisplay, dom.focusBtn);
+		state.focusDurationMinutes = minutes;
+		state.focusTimeLeft = minutes * SECONDS_PER_MINUTE;
+		state.forceFocusRender = true;
+			renderFocus(state, dom);
 	});
 
 	dom.trackingToggleBtn?.addEventListener("click", async () => {
@@ -110,6 +226,8 @@ document.addEventListener("DOMContentLoaded", () => {
 		const result = await invokeTauri("set_tracking_enabled", { enabled: next });
 		if (result && typeof result.tracking_enabled === "boolean") {
 			applyTrackingStatus(result.tracking_enabled, state, dom);
+		} else {
+			applyTrackingStatus(state.trackingEnabled, state, dom);
 		}
 	});
 
@@ -118,6 +236,8 @@ document.addEventListener("DOMContentLoaded", () => {
 		const result = await invokeTauri("set_launch_on_startup", { enabled: next });
 		if (result && typeof result.enabled === "boolean") {
 			applyStartupStatus(result.enabled, state, dom);
+		} else {
+			applyStartupStatus(state.launchOnStartupEnabled, state, dom);
 		}
 	});
 
@@ -126,37 +246,26 @@ document.addEventListener("DOMContentLoaded", () => {
 		const result = await invokeTauri("set_hide_on_close", { enabled: next });
 		if (result && typeof result.hide_on_close === "boolean") {
 			applyCloseBehaviorStatus(result.hide_on_close, state, dom);
-		}
-	});
-
-	dom.musicToggleBtn?.addEventListener("click", async () => {
-		if (!dom.musicAudio) return;
-		if (dom.musicAudio.paused) {
-			try {
-				await dom.musicAudio.play();
-				dom.musicToggleBtn.textContent = "Pause";
-			} catch (error) {
-				console.warn("Could not start music:", error);
-			}
 		} else {
-			dom.musicAudio.pause();
-			dom.musicToggleBtn.textContent = "Play";
+			applyCloseBehaviorStatus(state.hideOnCloseEnabled, state, dom);
 		}
 	});
 
-	dom.musicStopBtn?.addEventListener("click", () => {
-		if (!dom.musicAudio) return;
-		dom.musicAudio.pause();
-		dom.musicAudio.currentTime = 0;
-		if (dom.musicToggleBtn) dom.musicToggleBtn.textContent = "Play";
-	});
-
-	dom.musicVolume?.addEventListener("input", () => {
-		if (dom.musicAudio) dom.musicAudio.volume = Number(dom.musicVolume.value);
+	dom.hourlyNotificationsToggleBtn?.addEventListener("click", async () => {
+		const next = !state.hourlyNotificationsEnabled;
+		const result = await invokeTauri("set_hourly_notifications", { enabled: next });
+		if (result && typeof result.enabled === "boolean") {
+			applyHourlyNotificationsStatus(result.enabled, state, dom);
+		} else {
+			applyHourlyNotificationsStatus(state.hourlyNotificationsEnabled, state, dom);
+		}
 	});
 
 	dom.openBreatheBtn?.addEventListener("click", () => openModal(dom));
-	dom.closeBreatheBtn?.addEventListener("click", () => closeModal(dom, state));
+	dom.closeBreatheBtn?.addEventListener("click", () => {
+		state.breatheTime = 0;
+		closeModal(dom, state);
+	});
 	dom.modal?.addEventListener("click", (event) => {
 		if (event.target === dom.modal) closeModal(dom, state);
 	});
@@ -182,13 +291,38 @@ document.addEventListener("DOMContentLoaded", () => {
 	window.addEventListener("beforeunload", () => {
 		clearInterval(ticker);
 		clearInterval(clockTicker);
+		if (state.usageAlertTimer) {
+			clearTimeout(state.usageAlertTimer);
+		}
+		if (state.fallbackInterval) {
+			clearInterval(state.fallbackInterval);
+		}
 		if (typeof state.unsubscribeUsageListener === "function") {
 			state.unsubscribeUsageListener();
 		}
 		if (typeof state.unsubscribeTrackingListener === "function") {
 			state.unsubscribeTrackingListener();
 		}
+		if (typeof state.unsubscribeResetListener === "function") {
+			state.unsubscribeResetListener();
+		}
+		if (typeof state.unsubscribeAlertListener === "function") {
+			state.unsubscribeAlertListener();
+		}
 	});
+
+	if (window.__TAURI__?.event?.listen) {
+		window.__TAURI__.event.listen("tauri://exit", () => {
+			clearInterval(ticker);
+			clearInterval(clockTicker);
+			if (state.usageAlertTimer) {
+				clearTimeout(state.usageAlertTimer);
+			}
+			if (state.fallbackInterval) {
+				clearInterval(state.fallbackInterval);
+			}
+		});
+	}
 });
 
 async function initializeTrackingState(state, dom) {
@@ -225,12 +359,19 @@ async function initializeCloseBehaviorState(state, dom) {
 	}
 }
 
+async function initializeHourlyNotificationsState(state, dom) {
+	const status = await invokeTauri("get_hourly_notifications");
+	if (status && typeof status.enabled === "boolean") {
+		applyHourlyNotificationsStatus(status.enabled, state, dom);
+	}
+}
+
 async function initializeUsageSync(state, dom) {
 	await refreshUsageSnapshot(state, dom);
 
 	const tauriEvent = window.__TAURI__?.event;
 	if (!tauriEvent?.listen) {
-		setInterval(() => {
+		state.fallbackInterval = setInterval(() => {
 			refreshUsageSnapshot(state, dom);
 		}, 15000);
 		return;
@@ -242,9 +383,64 @@ async function initializeUsageSync(state, dom) {
 			if (!snapshot || !Array.isArray(snapshot.apps)) return;
 			applyUsageSnapshot(snapshot, state, dom);
 		});
+		state.unsubscribeAlertListener = await tauriEvent.listen("usage://alert", (event) => {
+			const payload = event?.payload;
+			if (!payload) return;
+
+			if (payload.level === "critical") {
+				state.fiveHourAlertShown = true;
+				applyNotificationAlertState(true, dom);
+				showUsageAlertToast(payload.message || "Usage alert", true, state, dom);
+			}
+		});
+		state.unsubscribeResetListener = await tauriEvent.listen("usage://reset", () => {
+			state.analyticsArchive = { days: [], lastSnapshot: null };
+			saveAnalyticsArchive(state.analyticsArchive);
+			state.totalSecondsToday = 0;
+			state.fiveHourAlertShown = false;
+			state.alertDayKey = getTodayKey();
+			applyNotificationAlertState(false, dom);
+			renderAnalytics(state, dom);
+			renderTime(state, dom);
+		});
 	} catch (error) {
 		console.warn("Could not subscribe to usage updates:", error);
 	}
+}
+
+function applyNotificationAlertState(active, dom) {
+	if (dom.notificationBtn) {
+		dom.notificationBtn.classList.toggle("is-alert", active);
+	}
+
+	if (dom.notificationBadge) {
+		dom.notificationBadge.classList.toggle("hidden", !active);
+	}
+}
+
+function showUsageAlertToast(message, critical, state, dom) {
+	if (!dom.usageAlertToast) return;
+
+	if (state.usageAlertTimer) {
+		clearTimeout(state.usageAlertTimer);
+		state.usageAlertTimer = null;
+	}
+
+	dom.usageAlertToast.textContent = message;
+	dom.usageAlertToast.classList.toggle("critical", Boolean(critical));
+	dom.usageAlertToast.classList.remove("hidden");
+
+	requestAnimationFrame(() => {
+		dom.usageAlertToast?.classList.add("show");
+	});
+
+	state.usageAlertTimer = setTimeout(() => {
+		dom.usageAlertToast?.classList.remove("show");
+		state.usageAlertTimer = setTimeout(() => {
+			dom.usageAlertToast?.classList.add("hidden");
+			state.usageAlertTimer = null;
+		}, 220);
+	}, 4200);
 }
 
 function loadAnalyticsArchive() {
@@ -252,12 +448,15 @@ function loadAnalyticsArchive() {
 	if (!raw) return { days: [], lastSnapshot: null };
 
 	try {
-		const archive = normalizeAnalyticsArchive(JSON.parse(raw));
+		const parsed = JSON.parse(raw);
+		if (!parsed || typeof parsed !== 'object') throw new Error('Invalid archive format');
+		const archive = normalizeAnalyticsArchive(parsed);
 		const trimmed = trimAnalyticsArchive(archive);
 		saveAnalyticsArchive(trimmed);
 		return trimmed;
 	} catch (error) {
 		console.warn("Could not parse analytics archive:", error);
+		localStorage.removeItem(ANALYTICS_STORAGE_KEY);
 		return { days: [], lastSnapshot: null };
 	}
 }
@@ -279,8 +478,9 @@ function normalizeAnalyticsArchive(archive) {
 }
 
 function trimAnalyticsArchive(archive, referenceDate = new Date()) {
-	const windowStart = new Date(referenceDate);
-	windowStart.setHours(0, 0, 0, 0);
+	const normalized = new Date(referenceDate);
+	normalized.setHours(0, 0, 0, 0);
+	const windowStart = new Date(normalized);
 	windowStart.setDate(windowStart.getDate() - (ANALYTICS_WINDOW_DAYS - 1));
 	const windowStartKey = getTodayKey(windowStart);
 
@@ -353,6 +553,21 @@ function formatLongDate(dateKey) {
 	return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
+function formatDurationShort(seconds) {
+	const s = Math.max(0, Number(seconds) || 0);
+	if (s >= 3600) {
+		const hrs = Math.floor(s / 3600);
+		const mins = Math.floor((s % 3600) / 60);
+		return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+	}
+	if (s >= 60) {
+		const mins = Math.floor(s / 60);
+		const secs = s % 60;
+		return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+	}
+	return `${s}s`;
+}
+
 function addOrUpdateDay(archive, dateKey) {
 	let day = archive.days.find((entry) => entry.dateKey === dateKey);
 	if (!day) {
@@ -412,10 +627,11 @@ function updateAnalyticsArchiveFromSnapshot(snapshot, state) {
 		totalSeconds: currentTotal,
 		apps: currentApps
 	};
-	const trimmed = trimAnalyticsArchive(archive);
-state.totalSecondsToday = day.totalSeconds;
-state.analyticsArchive = trimmed;
-saveAnalyticsArchive(trimmed);    
+	const finalArchive = trimAnalyticsArchive(archive);
+	state.totalSecondsToday = day.totalSeconds;
+	state.analyticsArchive = finalArchive;
+	state.analyticsDirty = true;
+	saveAnalyticsArchive(finalArchive);
 }
 
 function renderUsage(container, usageItems) {
@@ -449,13 +665,11 @@ function renderUsage(container, usageItems) {
 	container.appendChild(fragment);
 
 	requestAnimationFrame(() => {
-		requestAnimationFrame(() => {
-			const bars = container.querySelectorAll(".usage-fill");
-			for (const bar of bars) {
-				const target = bar.getAttribute("data-target") || "0";
-				bar.style.width = `${target}%`;
-			}
-		});
+		const bars = container.querySelectorAll(".usage-fill");
+		for (const bar of bars) {
+			const target = bar.getAttribute("data-target") || "0";
+			bar.style.width = `${target}%`;
+		}
 	});
 }
 
@@ -471,20 +685,24 @@ function showFocusToast(dom) {
 
 function tickApp(state, dom) {
 	if (state.isFocusing && state.focusTimeLeft % 15 === 0) {
-    updateClockAndGreeting(dom);
-}
+		updateClockAndGreeting(dom);
+	}
 
 	if (state.isFocusing) {
 		state.focusTimeLeft = Math.max(0, state.focusTimeLeft - 1);
 		if (state.focusTimeLeft === 0) {
 			state.isFocusing = false;
 			showFocusToast(dom);
-			state.focusTimeLeft = 25 * SECONDS_PER_MINUTE;
+			setTimeout(() => {
+				state.focusTimeLeft = state.focusDurationMinutes * SECONDS_PER_MINUTE;
+				state.forceFocusRender = true;
+					renderFocus(state, dom);
+			}, 2000);
 		}
 	}
 
 	if (state.isBreathing) {
-		state.breatheTime -= 1;
+		state.breatheTime = Math.max(0, state.breatheTime - 1);
 		state.breathePhaseSeconds += 1;
 
 		if (dom.breatheTimer) {
@@ -502,14 +720,10 @@ function tickApp(state, dom) {
 		}
 	}
 
-	renderFocus(state, dom.focusDisplay, dom.focusBtn);
+	renderFocus(state, dom);
 }
 
 function renderTime(state, dom) {
-	// if (dom.sessionTimer) {
-	// 	dom.sessionTimer.textContent = formatClockDuration(state.totalSecondsToday);
-	// }
-
 	const totalHours = Math.floor(state.totalSecondsToday / 3600);
 	const totalMins = Math.floor((state.totalSecondsToday % 3600) / SECONDS_PER_MINUTE);
 
@@ -523,6 +737,21 @@ function renderTime(state, dom) {
 	}
 }
 
+function getSelectedFocusMinutes(dom) {
+	const selected = dom.focusMinuteSelect?.value || "25";
+	if (selected === "custom") {
+		const customValue = Number(dom.focusMinuteCustom?.value) || 25;
+		const clamped = Math.max(1, Math.min(240, Math.round(customValue)));
+		if (dom.focusMinuteCustom && String(clamped) !== dom.focusMinuteCustom.value) {
+			dom.focusMinuteCustom.value = String(clamped);
+		}
+		return clamped;
+	}
+
+	const preset = Number(selected);
+	return Math.max(1, Math.min(240, Number.isFinite(preset) ? preset : 25));
+}
+
 async function refreshUsageSnapshot(state, dom) {
 	const snapshot = await invokeTauri("get_usage_snapshot");
 	if (!snapshot || !Array.isArray(snapshot.apps)) return;
@@ -530,6 +759,13 @@ async function refreshUsageSnapshot(state, dom) {
 }
 
 function applyUsageSnapshot(snapshot, state, dom) {
+	const todayKey = getTodayKey();
+	if (state.alertDayKey !== todayKey) {
+		state.alertDayKey = todayKey;
+		state.fiveHourAlertShown = false;
+		applyNotificationAlertState(false, dom);
+	}
+
 	state.currentApp = snapshot.current_app || "Unknown";
 	state.topApp = snapshot.top_app || "Unknown";
 	state.usageApps = Array.isArray(snapshot.apps) ? snapshot.apps : [];
@@ -559,9 +795,19 @@ function applyUsageSnapshot(snapshot, state, dom) {
 		dom.trackingInline.textContent = state.trackingEnabled ? "On" : "Off";
 	}
 
-	renderAnalytics(state, dom);
-
 	renderTime(state, dom);
+
+	const totalSeconds = Number(snapshot.total_seconds) || 0;
+	const overLimit = totalSeconds >= DAILY_ALERT_THRESHOLD_SECONDS;
+	applyNotificationAlertState(overLimit, dom);
+	if (overLimit && !state.fiveHourAlertShown) {
+		state.fiveHourAlertShown = true;
+		showUsageAlertToast("Alert: You have used your PC for 5 hours today. Please take a break.", true, state, dom);
+	}
+
+	if (state.analyticsDirty && state.activePage === "analytics") {
+		renderAnalytics(state, dom);
+	}
 }
 
 function applyTrackingStatus(enabled, state, dom) {
@@ -618,19 +864,47 @@ function applyCloseBehaviorStatus(enabled, state, dom) {
 	}
 }
 
+function applyHourlyNotificationsStatus(enabled, state, dom) {
+	state.hourlyNotificationsEnabled = enabled;
+
+	if (dom.hourlyNotificationsToggleBtn) {
+		dom.hourlyNotificationsToggleBtn.textContent = enabled ? "Hourly ON" : "Hourly OFF";
+		dom.hourlyNotificationsToggleBtn.classList.toggle("on", enabled);
+		dom.hourlyNotificationsToggleBtn.classList.toggle("off", !enabled);
+	}
+
+	if (dom.hourlyNotificationsStatusText) {
+		dom.hourlyNotificationsStatusText.textContent = enabled
+			? "Hourly background notifications are enabled"
+			: "Hourly background notifications are disabled";
+	}
+}
+
 function bindPageNavigation(state, dom) {
 	const pageButtons = document.querySelectorAll("[data-page-btn]");
 	const pageViews = document.querySelectorAll("[data-page]");
 
 	const activatePage = (pageName) => {
+		console.log("Navigation: activatePage ->", pageName);
 		state.activePage = pageName;
-		pageButtons.forEach((button) => {
-			const active = button.getAttribute("data-page-btn") === pageName;
-			button.classList.toggle("active", active);
-		});
+		document.activeElement?.blur();
+		if (state.isBreathing) {
+			closeModal(dom, state);
+		}
+		const pageViews = document.querySelectorAll(".page-view");
+		const pageButtons = document.querySelectorAll("[data-page-btn]");
+
 		pageViews.forEach((view) => {
 			view.classList.toggle("page-active", view.getAttribute("data-page") === pageName);
 		});
+
+		pageButtons.forEach((button) => {
+			button.classList.toggle("active", button.getAttribute("data-page-btn") === pageName);
+		});
+
+		if (pageName === "analytics" && state.analyticsDirty) {
+			renderAnalytics(state, dom);
+		}
 	};
 
 	pageButtons.forEach((button) => {
@@ -642,9 +916,9 @@ function bindPageNavigation(state, dom) {
 
 function renderAnalytics(state, dom) {
 	if (!dom.analyticsChart || !dom.analyticsList || !dom.analyticsDays) return;
+	if (!state.analyticsDirty) return;
 
-	const archive = normalizeAnalyticsArchive(state.analyticsArchive);
-	state.analyticsArchive = archive;
+	const archive = state.analyticsArchive;
 	const days = archive.days.slice().sort((left, right) => left.dateKey.localeCompare(right.dateKey));
 	const totalSeconds = days.reduce((sum, day) => sum + (Number(day.totalSeconds) || 0), 0);
 	const averageSeconds = days.length ? Math.round(totalSeconds / days.length) : 0;
@@ -669,6 +943,8 @@ function renderAnalytics(state, dom) {
 	renderAnalyticsBars(dom.analyticsChart, days);
 	renderTopApps(dom.analyticsList, topApps);
 	renderArchiveRows(dom.analyticsDays, days);
+
+	state.analyticsDirty = false;
 }
 
 function aggregateAppTotals(days) {
@@ -699,8 +975,10 @@ function renderAnalyticsBars(container, days) {
 		container.appendChild(row);
 	});
 	requestAnimationFrame(() => {
-		container.querySelectorAll(".analytics-day-fill").forEach((bar) => {
-			bar.style.width = `${bar.getAttribute("data-fill") || "0"}%`;
+		requestAnimationFrame(() => {
+			container.querySelectorAll(".analytics-day-fill").forEach((bar) => {
+				bar.style.width = `${bar.getAttribute("data-fill") || "0"}%`;
+			});
 		});
 	});
 }
@@ -749,41 +1027,27 @@ function renderArchiveRows(container, days) {
 		container.appendChild(row);
 	});
 	requestAnimationFrame(() => {
-		container.querySelectorAll(".analytics-day-fill").forEach((bar) => {
-			bar.style.width = `${bar.getAttribute("data-fill") || "0"}%`;
+		requestAnimationFrame(() => {
+			container.querySelectorAll(".analytics-day-fill").forEach((bar) => {
+				bar.style.width = `${bar.getAttribute("data-fill") || "0"}%`;
+			});
 		});
 	});
 }
 
 async function invokeTauri(command, args = {}) {
 	const tauriCore = window.__TAURI__?.core;
-	if (!tauriCore?.invoke) return null;
+	if (!tauriCore?.invoke) {
+		console.warn(`Tauri not available for command: ${command}`);
+		return null;
+	}
 
 	try {
 		return await tauriCore.invoke(command, args);
 	} catch (error) {
 		console.warn(`Tauri invoke failed for ${command}:`, error);
 		return null;
-	}
-}
-
-function formatDurationShort(seconds) {
-	if (seconds < 60) return `${seconds}s`;
-	if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-	const h = Math.floor(seconds / 3600);
-	const m = Math.floor((seconds % 3600) / 60);
-	return `${h}h ${m}m`;
-}
-
-function formatClockDuration(seconds) {
-	const safe = Math.max(0, seconds);
-	const h = Math.floor(safe / 3600);
-	const m = Math.floor((safe % 3600) / 60)
-		.toString()
-		.padStart(2, "0");
-	const s = (safe % 60).toString().padStart(2, "0");
-	if (h > 0) return `${h}:${m}:${s}`;
-	return `${m}:${s}`;
+ 	}
 }
 
 function getBadgeLabel(name) {
@@ -797,18 +1061,74 @@ function getBadgeLabel(name) {
 	return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
-function renderFocus(state, focusDisplay, focusButton) {
-	if (focusDisplay) {
+function renderFocus(state, dom) {
+	if (state.lastFocusRender === state.focusTimeLeft && !state.forceFocusRender) return;
+	state.lastFocusRender = state.focusTimeLeft;
+	state.forceFocusRender = false;
+
+	const selectedMinutes = Math.max(1, Number(state.focusDurationMinutes) || 25);
+	const selectedSeconds = selectedMinutes * SECONDS_PER_MINUTE;
+
+	if (dom.focusDisplay) {
 		const mins = Math.floor(state.focusTimeLeft / SECONDS_PER_MINUTE)
 			.toString()
 			.padStart(2, "0");
 		const secs = (state.focusTimeLeft % SECONDS_PER_MINUTE).toString().padStart(2, "0");
-		focusDisplay.textContent = `${mins}:${secs}`;
+		dom.focusDisplay.textContent = `${mins}:${secs}`;
 	}
 
-	if (focusButton) {
-		focusButton.textContent = state.isFocusing ? "Pause" : state.focusTimeLeft < 25 * 60 ? "Resume Focus" : "Start Focus";
+	try {
+		localStorage.setItem(FOCUS_TIMER_STORAGE_KEY, String(Math.max(0, Math.round(state.focusTimeLeft))));
+		localStorage.setItem(FOCUS_TIMER_RUNNING_STORAGE_KEY, state.isFocusing ? "1" : "0");
+	} catch (error) {
+		console.warn("Could not persist focus timer state:", error);
 	}
+
+	if (dom.focusStartBtn) {
+		dom.focusStartBtn.textContent = state.isFocusing ? "Pause" : state.focusTimeLeft < selectedSeconds ? "Resume" : "Start";
+	}
+
+	if (dom.focusPopoutBtn) {
+		dom.focusPopoutBtn.classList.toggle("disabled", !state.isFocusing);
+		dom.focusPopoutBtn.setAttribute("aria-disabled", state.isFocusing ? "false" : "true");
+	}
+
+	if (dom.focusPopup) {
+		dom.focusPopup.classList.toggle("running", state.isFocusing);
+	}
+}
+
+async function openFocusPopup(remainingSeconds) {
+	const safeRemaining = Math.max(1, Math.round(remainingSeconds));
+	const tauriInvoke = window.__TAURI__?.core?.invoke;
+
+	if (tauriInvoke) {
+		try {
+			await tauriInvoke("show_focus_popup", { remainingSeconds: safeRemaining });
+			return true;
+		} catch (error) {
+			console.warn("Could not open native focus popup:", error);
+			return false;
+		}
+	}
+
+	return openFocusPopupFallback(safeRemaining);
+}
+
+function openFocusPopupFallback(remainingSeconds) {
+	const url = `./popup.html#remaining=${encodeURIComponent(String(Math.max(1, Math.round(remainingSeconds))))}`;
+	const popup = window.open(url, "touchgrass-focus", "popup,width=180,height=80,left=40,top=40");
+	if (!popup) {
+		console.warn("Popup window was blocked by the browser.");
+		return false;
+	}
+
+	return true;
+}
+
+function applyFocusInputVisibility(dom) {
+	if (!dom.focusMinuteSelect || !dom.focusMinuteCustom) return;
+	dom.focusMinuteCustom.classList.toggle("hidden", dom.focusMinuteSelect.value !== "custom");
 }
 
 function updateClockAndGreeting(dom) {

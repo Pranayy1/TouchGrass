@@ -1,0 +1,20 @@
+		}
+	}
+
+	day.totalSeconds += deltaTotal;
+	mergeAppDeltas(day.apps, deltaApps);
+	archive.lastSnapshot = {
+		dateKey: todayKey,
+		totalSeconds: currentTotal,
+		apps: currentApps
+	};
+	const trimmed = trimAnalyticsArchive(archive);
+	state.totalSecondsToday = day.totalSeconds;
+	state.analyticsArchive = trimmed;
+	state.analyticsDirty = true;
+	saveAnalyticsArchive(trimmed);
+}
+
+function renderUsage(container, usageItems) {
+	if (!container) return;
+	container.innerHTML = "";

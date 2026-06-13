@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     fs,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -9,10 +9,12 @@ use std::{
 };
 use tauri::{
     menu::{Menu, MenuItem},
+    webview::WebviewWindowBuilder,
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, State, WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, State, WindowEvent, WebviewUrl,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
+use tauri_plugin_notification::NotificationExt;
 use chrono::Local;
 
 #[cfg(target_os = "windows")]
@@ -26,6 +28,7 @@ use windows_sys::Win32::{
 };
 
 #[derive(Default, Serialize, Deserialize)]
+#[serde(default)]
 struct TrackerState {
     total_millis: u64,
     current_app: String,
@@ -33,6 +36,15 @@ struct TrackerState {
     tracking_enabled: bool,
     hide_on_close: bool,
     day_key: String,
+    processed_hours: u64,
+    five_hour_alert_sent: bool,
+    hourly_notifications_sent: BTreeSet<u64>,
+    #[serde(default = "default_hourly_notifications_enabled")]
+    hourly_notifications_enabled: bool,
+}
+
+fn default_hourly_notifications_enabled() -> bool {
+    true
 }
 
 #[derive(Clone)]
@@ -69,6 +81,19 @@ struct CloseBehaviorStatus {
     hide_on_close: bool,
 }
 
+#[derive(Clone, Serialize)]
+struct HourlyNotificationsStatus {
+    enabled: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct UsageAlert {
+    level: String,
+    message: String,
+    total_hours: u64,
+    total_seconds: u64,
+}
+
 fn current_day_key() -> String {
     Local::now().date_naive().format("%Y-%m-%d").to_string()
 }
@@ -76,6 +101,9 @@ fn current_day_key() -> String {
 fn reset_daily_state(state: &mut TrackerState) {
     state.total_millis = 0;
     state.per_app_millis.clear();
+    state.processed_hours = 0;
+    state.five_hour_alert_sent = false;
+    state.hourly_notifications_sent.clear();
     state.current_app = if state.tracking_enabled {
         "Waiting for user app".to_string()
     } else {
@@ -98,7 +126,10 @@ fn ensure_daily_rollover(state: &mut TrackerState) -> bool {
 fn get_usage_snapshot(state: State<'_, TrackerHandle>) -> UsageSnapshot {
     match state.0.lock() {
         Ok(guard) => snapshot_from_state(&guard),
-        Err(poisoned) => snapshot_from_state(&poisoned.into_inner()),
+        Err(poisoned) => {
+            eprintln!("Tracker state mutex poisoned, recovering: {:?}", poisoned);
+            snapshot_from_state(&poisoned.into_inner())
+        }
     }
 }
 
@@ -132,6 +163,51 @@ fn hide_to_tray(app: AppHandle) {
 #[tauri::command]
 fn show_main_window(app: AppHandle) {
     reveal_main_window(&app);
+}
+
+#[tauri::command]
+async fn show_focus_popup(app: AppHandle, remaining_seconds: u32) -> tauri::Result<()> {
+    let remaining = remaining_seconds.max(1);
+
+    if let Some(window) = app.get_webview_window("focus-popup") {
+        window.set_always_on_top(true)?;
+        window.set_maximizable(false)?;
+        window.set_shadow(false)?;
+        window.set_size(LogicalSize::new(172.0, 44.0))?;
+        window.show()?;
+        window.unminimize()?;
+        window.set_focus()?;
+        return Ok(());
+    }
+
+    let initialization_script = format!("window.__FOCUS_POPUP_REMAINING__ = {};", remaining);
+
+    let popup =
+        WebviewWindowBuilder::new(&app, "focus-popup", WebviewUrl::App("popup.html".into()))
+            .title("Focus")
+            .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .resizable(false)
+            .maximizable(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .focused(true)
+            .inner_size(172.0, 44.0)
+            .initialization_script(initialization_script)
+            .build()?;
+
+    popup.set_focus()?;
+    Ok(())
+}
+
+#[tauri::command]
+fn close_focus_popup(app: AppHandle) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window("focus-popup") {
+        window.close()?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -193,6 +269,31 @@ fn set_hide_on_close(
     }
 }
 
+#[tauri::command]
+fn get_hourly_notifications(state: State<'_, TrackerHandle>) -> HourlyNotificationsStatus {
+    let enabled = state
+        .0
+        .lock()
+        .map(|s| s.hourly_notifications_enabled)
+        .unwrap_or(true);
+
+    HourlyNotificationsStatus { enabled }
+}
+
+#[tauri::command]
+fn set_hourly_notifications(
+    enabled: bool,
+    state: State<'_, TrackerHandle>,
+    app: AppHandle,
+) -> HourlyNotificationsStatus {
+    if let Ok(mut tracker) = state.0.lock() {
+        tracker.hourly_notifications_enabled = enabled;
+        let _ = save_state(&tracker, &app);
+    }
+
+    HourlyNotificationsStatus { enabled }
+}
+
 fn millis_to_seconds(ms: u64) -> u64 {
     ms / 1000
 }
@@ -230,6 +331,62 @@ fn snapshot_from_state(state: &TrackerState) -> UsageSnapshot {
         top_app,
         tracking_enabled: state.tracking_enabled,
         apps,
+    }
+}
+
+fn is_running_in_tray(app: &AppHandle) -> bool {
+    if let Some(window) = app.get_webview_window("main") {
+        return window.is_visible().map(|visible| !visible).unwrap_or(true);
+    }
+
+    true
+}
+
+fn send_system_notification(app: &AppHandle, title: &str, body: &str) {
+    let _ = app
+        .notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show();
+}
+
+fn process_usage_alerts(state: &mut TrackerState, app: &AppHandle) {
+    let total_seconds = millis_to_seconds(state.total_millis);
+    let completed_hours = total_seconds / 3600;
+
+    if completed_hours > state.processed_hours {
+        let tray_mode = is_running_in_tray(app);
+
+        for hour in (state.processed_hours + 1)..=completed_hours {
+            if state.hourly_notifications_enabled
+                && tray_mode
+                && !state.hourly_notifications_sent.contains(&hour)
+            {
+                send_system_notification(
+                    app,
+                    "TouchGrass Hourly Usage",
+                    &format!("You have used your PC for {} hour{} today.", hour, if hour == 1 { "" } else { "s" }),
+                );
+                state.hourly_notifications_sent.insert(hour);
+            }
+        }
+
+        state.processed_hours = completed_hours;
+    }
+
+    if total_seconds >= 5 * 3600 && !state.five_hour_alert_sent {
+        state.five_hour_alert_sent = true;
+
+        let alert = UsageAlert {
+            level: "critical".to_string(),
+            message: "Alert: You have used your PC for 5 hours today. Please take a break.".to_string(),
+            total_hours: completed_hours,
+            total_seconds,
+        };
+
+        let _ = app.emit("usage://alert", alert.clone());
+        send_system_notification(app, "TouchGrass Usage Alert", &alert.message);
     }
 }
 
@@ -293,6 +450,7 @@ fn track_foreground_apps(shared: Arc<Mutex<TrackerState>>, app: AppHandle) {
                         let counter = state.per_app_millis.entry(credited_app).or_insert(0);
                         *counter += elapsed;
                     }
+                    process_usage_alerts(&mut state, &app);
                   
 
                     if changed || last_emit.elapsed() >= Duration::from_secs(8) {
@@ -359,6 +517,7 @@ fn reveal_main_window(app: &AppHandle) {
 fn reset_usage_data(tracker: &Arc<Mutex<TrackerState>>, app: &AppHandle) {
     if let Ok(mut state) = tracker.lock() {
         reset_daily_state(&mut state);
+        let _ = app.emit("usage://reset", ());
         let _ = app.emit("usage://snapshot", snapshot_from_state(&state));
         let _ = save_state(&state, app);
     }
@@ -408,10 +567,11 @@ fn load_state(app: &AppHandle) -> Result<TrackerState, Box<dyn std::error::Error
     let path = get_state_file_path(app);
     
     if !path.exists() {
-       let mut state = TrackerState::default();
-state.hide_on_close = true;
-state.tracking_enabled = true;   // set this first
-reset_daily_state(&mut state);   // now current_app = "Waiting for user app" ✅
+        let mut state = TrackerState::default();
+        state.hide_on_close = true;
+        state.tracking_enabled = true;
+        state.hourly_notifications_enabled = true;
+        reset_daily_state(&mut state);
         return Ok(state);
     }
     
@@ -422,6 +582,9 @@ reset_daily_state(&mut state);   // now current_app = "Waiting for user app" ✅
     } else {
         ensure_daily_rollover(&mut state);
     }
+
+    let hours_from_total = millis_to_seconds(state.total_millis) / 3600;
+    state.processed_hours = state.processed_hours.max(hours_from_total);
 
     Ok(state)
 }
@@ -605,10 +768,10 @@ pub fn run() {
                 }
 
                 state.current_app = if state.tracking_enabled {
-    "Waiting for user app".to_string()
-} else {
-    "Tracking paused".to_string()
-};
+                    "Waiting for user app".to_string()
+                } else {
+                    "Tracking paused".to_string()
+                };
             }
 
             setup_main_window_behavior(&handle, tracker.clone());
@@ -620,6 +783,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_usage_snapshot,
@@ -627,11 +791,15 @@ pub fn run() {
             set_tracking_enabled,
             hide_to_tray,
             show_main_window,
+            show_focus_popup,
+            close_focus_popup,
             quit_app,
             get_launch_on_startup,
             set_launch_on_startup,
             get_close_behavior,
-            set_hide_on_close
+            set_hide_on_close,
+            get_hourly_notifications,
+            set_hourly_notifications
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
