@@ -52,6 +52,11 @@ document.addEventListener("DOMContentLoaded", () => {
 		analyticsChart: document.getElementById("analytics-chart"),
 		analyticsList: document.getElementById("analytics-list"),
 		analyticsDays: document.getElementById("analytics-days"),
+		musicAudio: document.getElementById("calm-audio"),
+		musicToggleBtn: document.getElementById("music-toggle-btn"),
+		musicStopBtn: document.getElementById("music-stop-btn"),
+		musicVolume: document.getElementById("music-volume"),
+		musicStatus: document.getElementById("music-status"),
 		focusPopup: document.getElementById("focus-popup"),
 		focusMinuteSelect: document.getElementById("focus-minute-select"),
 		focusMinuteCustom: document.getElementById("focus-minute-custom"),
@@ -259,6 +264,63 @@ document.addEventListener("DOMContentLoaded", () => {
 		} else {
 			applyHourlyNotificationsStatus(state.hourlyNotificationsEnabled, state, dom);
 		}
+	});
+
+	if (dom.musicAudio && dom.musicVolume) {
+		dom.musicAudio.volume = Number(dom.musicVolume.value) || 0.35;
+	}
+
+	dom.musicToggleBtn?.addEventListener("click", async () => {
+		if (!dom.musicAudio) return;
+		if (dom.musicAudio.paused) {
+			try {
+				if (dom.musicStatus) dom.musicStatus.textContent = "Loading";
+				await dom.musicAudio.play();
+				dom.musicToggleBtn.textContent = "Pause";
+				if (dom.musicStatus) dom.musicStatus.textContent = "Playing";
+			} catch (error) {
+				console.warn("Could not start music:", error);
+				dom.musicToggleBtn.textContent = "Play";
+				if (dom.musicStatus) dom.musicStatus.textContent = "Error";
+			}
+		} else {
+			dom.musicAudio.pause();
+			dom.musicToggleBtn.textContent = "Play";
+			if (dom.musicStatus) dom.musicStatus.textContent = "Paused";
+		}
+	});
+
+	dom.musicStopBtn?.addEventListener("click", () => {
+		if (!dom.musicAudio) return;
+		dom.musicAudio.pause();
+		dom.musicAudio.currentTime = 0;
+		if (dom.musicToggleBtn) dom.musicToggleBtn.textContent = "Play";
+		if (dom.musicStatus) dom.musicStatus.textContent = "Stopped";
+	});
+
+	dom.musicVolume?.addEventListener("input", () => {
+		if (!dom.musicAudio) return;
+		dom.musicAudio.volume = Math.max(0, Math.min(1, Number(dom.musicVolume.value) || 0));
+	});
+
+	dom.musicAudio?.addEventListener("waiting", () => {
+		if (dom.musicStatus) dom.musicStatus.textContent = "Loading";
+	});
+
+	dom.musicAudio?.addEventListener("playing", () => {
+		if (dom.musicToggleBtn) dom.musicToggleBtn.textContent = "Pause";
+		if (dom.musicStatus) dom.musicStatus.textContent = "Playing";
+	});
+
+	dom.musicAudio?.addEventListener("pause", () => {
+		if (dom.musicAudio?.currentTime === 0) return;
+		if (dom.musicToggleBtn) dom.musicToggleBtn.textContent = "Play";
+		if (dom.musicStatus) dom.musicStatus.textContent = "Paused";
+	});
+
+	dom.musicAudio?.addEventListener("error", () => {
+		if (dom.musicToggleBtn) dom.musicToggleBtn.textContent = "Play";
+		if (dom.musicStatus) dom.musicStatus.textContent = "Error";
 	});
 
 	dom.openBreatheBtn?.addEventListener("click", () => openModal(dom));

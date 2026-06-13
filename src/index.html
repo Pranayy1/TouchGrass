@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: tauri: asset:; connect-src 'self' tauri: ipc: http://ipc.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: asset:; media-src 'self' data: asset: blob:; font-src 'self';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: tauri: asset:; connect-src 'self' tauri: ipc: http://ipc.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: asset:; media-src 'self' data: asset: blob: https://www.dropbox.com https://dl.dropboxusercontent.com; font-src 'self';" />
   <title>TouchGrass - Digital Wellbeing</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -44,6 +44,7 @@
         <p class="menu-label">Menu</p>
         <button class="menu-btn active" data-page-btn="dashboard"><svg class="icon"><use href="#i-dashboard"></use></svg><span>Dashboard</span></button>
         <button class="menu-btn" data-page-btn="analytics"><svg class="icon"><use href="#i-chart"></use></svg><span>Analytics</span></button>
+        <button class="menu-btn" data-page-btn="music"><svg class="icon"><use href="#i-target"></use></svg><span>Calm Music</span></button>
         <p class="menu-label spaced">Preferences</p>
         <button class="menu-btn" data-page-btn="settings"><svg class="icon"><use href="#i-settings"></use></svg><span>Settings</span></button>
       </nav>
@@ -167,6 +168,38 @@
           </div>
           <div id="analytics-days" class="analytics-days"></div>
         </article>
+      </section>
+
+      <section class="page-view" data-page="music">
+        <div class="music-layout">
+          <article class="card music-card">
+            <div class="card-head">
+              <h3>Calm Music</h3>
+              <span id="music-status" class="tag">Ready</span>
+            </div>
+            <div class="music-hero">
+              <div class="music-orb" aria-hidden="true"></div>
+              <div>
+                <h2>Soft Focus Ambient</h2>
+                <p>Streamed directly from your Dropbox audio file.</p>
+              </div>
+            </div>
+            <audio
+              id="calm-audio"
+              src="https://dl.dropboxusercontent.com/scl/fi/aac9a0uf14q71krx6svhf/audio.mp3?rlkey=q5vlcpxiays700q28o78ymtft&amp;st=f7jkcn4u&amp;dl=1"
+              loop
+              preload="none"
+            ></audio>
+            <div class="music-controls">
+              <button id="music-toggle-btn" class="btn btn-primary" type="button">Play</button>
+              <button id="music-stop-btn" class="btn btn-soft" type="button">Stop</button>
+            </div>
+            <div class="music-meta">
+              <span>Volume</span>
+              <input id="music-volume" type="range" min="0" max="1" step="0.05" value="0.35" aria-label="Music volume">
+            </div>
+          </article>
+        </div>
       </section>
 
       <section class="page-view" data-page="settings">
