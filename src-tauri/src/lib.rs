@@ -402,9 +402,14 @@ fn track_foreground_apps(shared: Arc<Mutex<TrackerState>>, app: AppHandle) {
         loop {
             thread::sleep(Duration::from_millis(sampling_ms));
             let now = Instant::now();
-            let elapsed = now.saturating_duration_since(last_tick).as_millis() as u64;
-            last_tick = now;
-            tick_count += 1;
+          let elapsed = now.saturating_duration_since(last_tick).as_millis() as u64;
+last_tick = now;
+
+if elapsed > 30_000 {
+    continue;
+}
+
+tick_count += 1;
 
             // Only call expensive Windows API every 3rd tick, reuse last_app for time accumulation
             let detected_active = if tick_count % 3 == 0 {
@@ -577,6 +582,18 @@ fn load_state(app: &AppHandle) -> Result<TrackerState, Box<dyn std::error::Error
     
     let json = fs::read_to_string(&path)?;
     let mut state: TrackerState = serde_json::from_str(&json)?;
+    let calculated_total: u64 =
+    state.per_app_millis.values().sum();
+
+if state.total_millis != calculated_total {
+    eprintln!(
+        "Repairing corrupted total_millis: {} -> {}",
+        state.total_millis,
+        calculated_total
+    );
+
+    state.total_millis = calculated_total;
+}
     if state.day_key.is_empty() {
         reset_daily_state(&mut state);
     } else {

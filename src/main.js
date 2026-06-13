@@ -1,6 +1,6 @@
 const SECONDS_PER_MINUTE = 60;
 const DAILY_GOAL_SECONDS = 8 * 60 * 60;
-const ANALYTICS_STORAGE_KEY = "touchgrass_analytics_v1";
+const ANALYTICS_STORAGE_KEY = "touchgrass_analytics_v2";
 const FOCUS_TIMER_STORAGE_KEY = "touchgrass_focus_remaining_seconds";
 const FOCUS_TIMER_RUNNING_STORAGE_KEY = "touchgrass_focus_is_running";
 const ANALYTICS_WINDOW_DAYS = 7;
@@ -664,35 +664,32 @@ function mergeAppDeltas(target, deltas) {
 function updateAnalyticsArchiveFromSnapshot(snapshot, state) {
 	const archive = normalizeAnalyticsArchive(state.analyticsArchive);
 	const todayKey = getTodayKey();
+
 	const currentApps = normalizeAppMap(snapshot.apps);
 	const currentTotal = Number(snapshot.total_seconds) || 0;
-	const previousSnapshot = normalizeSnapshotRecord(archive.lastSnapshot);
+
 	const day = addOrUpdateDay(archive, todayKey);
 
-	let deltaTotal = currentTotal;
-	let deltaApps = currentApps;
+	// Rust is source of truth
+	day.totalSeconds = currentTotal;
 
-	if (previousSnapshot) {
-		if (currentTotal < previousSnapshot.totalSeconds) {
-			deltaTotal = currentTotal;
-			deltaApps = currentApps;
-		} else {
-			deltaTotal = Math.max(0, currentTotal - previousSnapshot.totalSeconds);
-			deltaApps = calculateAppDeltas(currentApps, previousSnapshot.apps);
-		}
+	day.apps = {};
+	for (const [name, seconds] of Object.entries(currentApps)) {
+		day.apps[name] = seconds;
 	}
 
-	day.totalSeconds += deltaTotal;
-	mergeAppDeltas(day.apps, deltaApps);
 	archive.lastSnapshot = {
 		dateKey: todayKey,
 		totalSeconds: currentTotal,
 		apps: currentApps
 	};
+
 	const finalArchive = trimAnalyticsArchive(archive);
-	state.totalSecondsToday = day.totalSeconds;
+
+	state.totalSecondsToday = currentTotal;
 	state.analyticsArchive = finalArchive;
 	state.analyticsDirty = true;
+
 	saveAnalyticsArchive(finalArchive);
 }
 
@@ -786,16 +783,29 @@ function tickApp(state, dom) {
 }
 
 function renderTime(state, dom) {
-	const totalHours = Math.floor(state.totalSecondsToday / 3600);
-	const totalMins = Math.floor((state.totalSecondsToday % 3600) / SECONDS_PER_MINUTE);
+	const totalSeconds = Number(
+		state.snapshot?.total_seconds ??
+		state.totalSeconds ??
+		0
+	);
+
+	const totalHours = Math.floor(totalSeconds / 3600);
+	const totalMins = Math.floor((totalSeconds % 3600) / SECONDS_PER_MINUTE);
 
 	if (dom.heroHours) {
 		dom.heroHours.textContent = `${totalHours}h ${totalMins}m`;
 	}
 
 	if (dom.progressCircle) {
-		const progressPercent = Math.min((state.totalSecondsToday / DAILY_GOAL_SECONDS) * 100, 100);
-		dom.progressCircle.setAttribute("stroke-dasharray", `${progressPercent} 100`);
+		const progressPercent = Math.min(
+			(totalSeconds / DAILY_GOAL_SECONDS) * 100,
+			100
+		);
+
+		dom.progressCircle.setAttribute(
+			"stroke-dasharray",
+			`${progressPercent} 100`
+		);
 	}
 }
 
@@ -821,6 +831,7 @@ async function refreshUsageSnapshot(state, dom) {
 }
 
 function applyUsageSnapshot(snapshot, state, dom) {
+	state.snapshot = snapshot;
 	const todayKey = getTodayKey();
 	if (state.alertDayKey !== todayKey) {
 		state.alertDayKey = todayKey;
