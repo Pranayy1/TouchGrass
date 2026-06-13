@@ -318,10 +318,15 @@ document.addEventListener("DOMContentLoaded", () => {
 		if (dom.musicStatus) dom.musicStatus.textContent = "Paused";
 	});
 
-	dom.musicAudio?.addEventListener("error", () => {
-		if (dom.musicToggleBtn) dom.musicToggleBtn.textContent = "Play";
-		if (dom.musicStatus) dom.musicStatus.textContent = "Error";
+dom.musicAudio?.addEventListener("error", () => {
+	console.error("Music playback failed", {
+		code: dom.musicAudio?.error?.code,
+		source: dom.musicAudio?.currentSrc
 	});
+
+	if (dom.musicToggleBtn) dom.musicToggleBtn.textContent = "Play";
+	if (dom.musicStatus) dom.musicStatus.textContent = "Music unavailable";
+});
 
 	dom.openBreatheBtn?.addEventListener("click", () => openModal(dom));
 	dom.closeBreatheBtn?.addEventListener("click", () => {
