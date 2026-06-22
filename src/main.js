@@ -70,6 +70,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 		focusPopoutBtn: document.getElementById("focus-popout-btn"),
 		focusResetBtn: document.getElementById("focus-reset-btn"),
 		notificationBtn: document.getElementById("notification-btn"),
+		updateCheckBtn: document.getElementById("update-check-btn"),
 		notificationBadge: document.getElementById("notification-badge"),
 		modal: document.getElementById("breathe-modal"),
 		breatheCircle: document.getElementById("breathe-circle"),
@@ -271,6 +272,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 		}
 	});
 
+	console.log("[UPDATE] Button found:", dom.updateCheckBtn);
+	dom.updateCheckBtn?.addEventListener("click", async () => {
+		console.log("[UPDATE] Click handler attached");
+		console.log("[UPDATE] Check Now clicked");
+		if (!shouldCheckForUpdates()) {
+			console.log("Skipping update check. Last check within 10 hours.");
+			return;
+		}
+		console.log("[UPDATE] Invoking Rust command");
+		try {
+			await invokeTauri("check_for_updates");
+			console.log("[UPDATE] Rust command completed");
+		} catch (error) {
+			console.error("[UPDATE] Rust command failed", error);
+		}
+	});
+
 	if (dom.musicAudio && dom.musicVolume) {
 		dom.musicAudio.volume = Number(dom.musicVolume.value) || 0.35;
 	}
@@ -414,6 +432,11 @@ function markUpdateCheckCompleted() {
 let currentUpdate = null;
 
 async function setupUpdateListener() {
+    if (!shouldCheckForUpdates()) {
+        console.log("Skipping update check. Last check within 10 hours.");
+        return;
+    }
+
     await listen(
         "update://available",
         (event) => {
