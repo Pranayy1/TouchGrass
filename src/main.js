@@ -274,21 +274,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 	});
 
 	console.log("[UPDATE] Button found:", dom.updateCheckBtn);
-	dom.updateCheckBtn?.addEventListener("click", async () => {
-		console.log("[UPDATE] Click handler attached");
-		console.log("[UPDATE] Check Now clicked");
-		if (!shouldCheckForUpdates()) {
-			console.log("Skipping update check. Last check within 10 hours.");
-			return;
-		}
-		console.log("[UPDATE] Invoking Rust command");
-		try {
-			await invokeTauri("check_for_updates");
-			console.log("[UPDATE] Rust command completed");
-		} catch (error) {
-			console.error("[UPDATE] Rust command failed", error);
-		}
-	});
+		dom.updateCheckBtn?.addEventListener("click", async () => {
+			console.log("[UPDATE] Check Now clicked — forcing immediate check");
+			const status = document.getElementById("update-check-status");
+			if (status) status.textContent = "Checking for updates...";
+			try {
+				await invokeTauri("check_for_updates");
+				console.log("[UPDATE] Rust command completed");
+			} catch (error) {
+				console.error("[UPDATE] Rust command failed", error);
+				if (status) status.textContent = "Update check failed";
+			}
+		});
 
 	if (dom.musicAudio && dom.musicVolume) {
 		dom.musicAudio.volume = Number(dom.musicVolume.value) || 0.35;
@@ -436,11 +433,6 @@ function markUpdateCheckCompleted() {
 let currentUpdate = null;
 
 async function setupUpdateListener() {
-    if (!shouldCheckForUpdates()) {
-        console.log("Skipping update check. Last check within 10 hours.");
-        return;
-    }
-
     await listen(
         "update://available",
         (event) => {
@@ -527,6 +519,11 @@ async function setupUpdateListener() {
             if (progressContainer) progressContainer.classList.add("hidden");
         }
     );
+
+    // Auto-check on startup (rate-limited)
+    if (shouldCheckForUpdates()) {
+        await invokeTauri("check_for_updates");
+    }
 }
 
 async function initializeTrackingState(state, dom) {

@@ -1,5 +1,5 @@
 [package]
-name = "touchgrass"
+name = "TouchGrass"
 version = "1.0.0"
 description = "A digital wellbeing app exclusively for desktop user"
 authors = ["you"]
