@@ -59,31 +59,8 @@
     </aside>
 
     <main class="main-area">
-      <section class="header-row">
-        <div id="update-banner" class="update-banner hidden">
-  <div>
-    <strong>New Update Available</strong>
-    <p id="update-version"></p>
-    <p id="update-notes"></p>
-  </div>
-
-  <div id="update-progress-container" class="hidden">
-    <div class="update-progress-bar">
-      <div id="update-progress-fill" class="update-progress-fill"></div>
-    </div>
-    <p id="update-progress-text">Downloading...</p>
-  </div>
-
-  <div class="update-banner-actions">
-    <button id="update-btn">
-      Download Update
-    </button>
-    <button id="update-dismiss-btn" aria-label="Dismiss update">
-      Dismiss
-    </button>
-  </div>
-</div>
-        <div>
+      <header class="header-row">
+        <div class="header-greeting">
           <h1 id="greeting-text">Good Morning!</h1>
           <p class="status-row"><span class="status-dot"></span><span id="tracking-summary-text">Tracking active PC session</span></p>
         </div>
@@ -95,8 +72,22 @@
           </button>
           <button class="icon-btn" aria-label="Calendar"><svg class="icon"><use href="#i-calendar"></use></svg></button>
         </div>
-      </section>
+      </header>
 
+      <div id="update-banner" class="update-banner hidden">
+        <div class="update-banner-header">
+          <svg class="icon" style="color:var(--brand)"><use href="#i-activity"></use></svg>
+          <strong>Update Available</strong>
+        </div>
+        <p class="update-version" id="update-version"></p>
+        <p class="update-notes" id="update-notes"></p>
+        <div class="update-banner-actions">
+          <button id="update-btn" class="btn btn-primary">View Release</button>
+          <button id="update-dismiss-btn" class="btn btn-soft">Dismiss</button>
+        </div>
+      </div>
+
+      <div class="content-area">
       <section class="page-view page-active" data-page="dashboard">
         <div class="grid-layout">
         <article class="card summary-card dashboard-summary-card">
@@ -104,8 +95,8 @@
             <svg viewBox="0 0 36 36" class="progress-svg" aria-hidden="true">
               <path class="circle-bg" d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831a 15.9155 15.9155 0 0 1 0 -31.831"></path>
               <path id="progress-circle" class="circle-fill" stroke-dasharray="0 100" d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-              <text x="18" y="16.5" text-anchor="middle" font-size="6" font-weight="700" fill="#0f172a" id="hero-hours">0h 0m</text>
-              <text x="18" y="21" text-anchor="middle" font-size="2.5" fill="#64748b" font-weight="600">Today's PC Time</text>
+              <text x="18" y="16.5" text-anchor="middle" font-size="6" font-weight="800" fill="#0f172a" id="hero-hours">0h 0m</text>
+              <text x="18" y="21" text-anchor="middle" font-size="2.5" fill="#64748b" font-weight="700">Today's PC Time</text>
             </svg>
           </div>
           <div class="summary-right">
@@ -271,12 +262,13 @@
                   <p class="settings-title">App Updates</p>
                   <p class="settings-subtitle" id="update-check-status">Check for new releases on GitHub</p>
                 </div>
-                <button id="update-check-btn" class="btn" type="button" aria-label="Check for updates">Check Now</button>
+                <button id="update-check-btn" class="btn btn-soft" type="button" aria-label="Check for updates">Check Now</button>
               </div>
             </div>
           </article>
         </div>
       </section>
+      </div>
     </main>
   </div>
 

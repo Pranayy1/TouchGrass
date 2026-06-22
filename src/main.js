@@ -1271,24 +1271,24 @@ function renderAnalyticsBars(container, days) {
 	if (!container) return;
 	container.innerHTML = "";
 	const maxSeconds = Math.max(1, ...days.map((day) => Number(day.totalSeconds) || 0));
+	const weekdayShort = (dateKey) => {
+		const d = new Date(`${dateKey}T00:00:00`);
+		return d.toLocaleDateString([], { weekday: "short" });
+	};
 	days.forEach((day) => {
 		const percent = Math.max(0, Math.min(100, ((Number(day.totalSeconds) || 0) / maxSeconds) * 100));
-		const row = document.createElement("div");
-		row.className = "analytics-bar";
-		row.innerHTML = `
-			<div class="analytics-bar-head">
-				<span>${day.weekday}</span>
-				<span>${formatDurationShort(Number(day.totalSeconds) || 0)}</span>
-			</div>
-			<div class="analytics-day-meta">${day.displayDate}</div>
-			<div class="analytics-day-track"><div class="analytics-day-fill" data-fill="${percent}"></div></div>
+		const col = document.createElement("div");
+		col.className = "analytics-bar";
+		col.innerHTML = `
+			<div class="analytics-bar-value">${formatDurationShort(Number(day.totalSeconds) || 0)}</div>
+			<div class="analytics-bar-track"><div class="analytics-bar-fill" style="height: 0%"></div></div>
+			<div class="analytics-bar-label">${weekdayShort(day.dateKey)}</div>
 		`;
-		container.appendChild(row);
-	});
-	requestAnimationFrame(() => {
+		container.appendChild(col);
+		const fill = col.querySelector(".analytics-bar-fill");
 		requestAnimationFrame(() => {
-			container.querySelectorAll(".analytics-day-fill").forEach((bar) => {
-				bar.style.width = `${bar.getAttribute("data-fill") || "0"}%`;
+			requestAnimationFrame(() => {
+				fill.style.height = `${Math.max(2, percent)}%`;
 			});
 		});
 	});
