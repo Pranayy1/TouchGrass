@@ -61,6 +61,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 		musicStopBtn: document.getElementById("music-stop-btn"),
 		musicVolume: document.getElementById("music-volume"),
 		musicStatus: document.getElementById("music-status"),
+		musicOrb: document.querySelector(".music-orb"),
 		focusPopup: document.getElementById("focus-popup"),
 		focusMinuteSelect: document.getElementById("focus-minute-select"),
 		focusMinuteCustom: document.getElementById("focus-minute-custom"),
@@ -301,6 +302,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 				await dom.musicAudio.play();
 				dom.musicToggleBtn.textContent = "Pause";
 				if (dom.musicStatus) dom.musicStatus.textContent = "Playing";
+				dom.musicOrb?.classList.add("playing");
 			} catch (error) {
 				console.warn("Could not start music:", error);
 				dom.musicToggleBtn.textContent = "Play";
@@ -310,6 +312,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 			dom.musicAudio.pause();
 			dom.musicToggleBtn.textContent = "Play";
 			if (dom.musicStatus) dom.musicStatus.textContent = "Paused";
+			dom.musicOrb?.classList.remove("playing");
 		}
 	});
 
@@ -319,6 +322,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 		dom.musicAudio.currentTime = 0;
 		if (dom.musicToggleBtn) dom.musicToggleBtn.textContent = "Play";
 		if (dom.musicStatus) dom.musicStatus.textContent = "Stopped";
+		dom.musicOrb?.classList.remove("playing");
 	});
 
 	dom.musicVolume?.addEventListener("input", () => {
@@ -1031,7 +1035,11 @@ function renderTime(state, dom) {
 	const totalMins = Math.floor((totalSeconds % 3600) / SECONDS_PER_MINUTE);
 
 	if (dom.heroHours) {
+		dom.heroHours.classList.add("count-updating");
 		dom.heroHours.textContent = `${totalHours}h ${totalMins}m`;
+		requestAnimationFrame(() => {
+			dom.heroHours?.classList.remove("count-updating");
+		});
 	}
 
 	if (dom.progressCircle) {
@@ -1125,7 +1133,7 @@ function applyTrackingStatus(enabled, state, dom) {
 	state.trackingEnabled = enabled;
 
 	if (dom.trackingToggleBtn) {
-		dom.trackingToggleBtn.textContent = enabled ? "Tracking ON" : "Tracking OFF";
+		dom.trackingToggleBtn.querySelector(".toggle-label").textContent = enabled ? "Tracking ON" : "Tracking OFF";
 		dom.trackingToggleBtn.classList.toggle("on", enabled);
 		dom.trackingToggleBtn.classList.toggle("off", !enabled);
 	}
@@ -1147,7 +1155,7 @@ function applyStartupStatus(enabled, state, dom) {
 	state.launchOnStartupEnabled = enabled;
 
 	if (dom.startupToggleBtn) {
-		dom.startupToggleBtn.textContent = enabled ? "Startup ON" : "Startup OFF";
+		dom.startupToggleBtn.querySelector(".toggle-label").textContent = enabled ? "Startup ON" : "Startup OFF";
 		dom.startupToggleBtn.classList.toggle("on", enabled);
 		dom.startupToggleBtn.classList.toggle("off", !enabled);
 	}
@@ -1163,7 +1171,7 @@ function applyCloseBehaviorStatus(enabled, state, dom) {
 	state.hideOnCloseEnabled = enabled;
 
 	if (dom.closeBehaviorToggleBtn) {
-		dom.closeBehaviorToggleBtn.textContent = enabled ? "Hide On Close" : "Close Exits";
+		dom.closeBehaviorToggleBtn.querySelector(".toggle-label").textContent = enabled ? "Hide On Close" : "Close Exits";
 		dom.closeBehaviorToggleBtn.classList.toggle("on", enabled);
 		dom.closeBehaviorToggleBtn.classList.toggle("off", !enabled);
 	}
@@ -1179,7 +1187,7 @@ function applyHourlyNotificationsStatus(enabled, state, dom) {
 	state.hourlyNotificationsEnabled = enabled;
 
 	if (dom.hourlyNotificationsToggleBtn) {
-		dom.hourlyNotificationsToggleBtn.textContent = enabled ? "Hourly ON" : "Hourly OFF";
+		dom.hourlyNotificationsToggleBtn.querySelector(".toggle-label").textContent = enabled ? "Hourly ON" : "Hourly OFF";
 		dom.hourlyNotificationsToggleBtn.classList.toggle("on", enabled);
 		dom.hourlyNotificationsToggleBtn.classList.toggle("off", !enabled);
 	}
@@ -1279,6 +1287,7 @@ function renderAnalyticsBars(container, days) {
 		const percent = Math.max(0, Math.min(100, ((Number(day.totalSeconds) || 0) / maxSeconds) * 100));
 		const col = document.createElement("div");
 		col.className = "analytics-bar";
+		col.setAttribute("data-tooltip", `${day.weekday}: ${formatDurationShort(Number(day.totalSeconds) || 0)}`);
 		col.innerHTML = `
 			<div class="analytics-bar-value">${formatDurationShort(Number(day.totalSeconds) || 0)}</div>
 			<div class="analytics-bar-track"><div class="analytics-bar-fill" style="height: 0%"></div></div>
@@ -1501,5 +1510,6 @@ function applyBreathPhase(state, dom) {
 
 	if (dom.breatheCircle) {
 		dom.breatheCircle.classList.toggle("inhale", state.isInhale);
+		dom.breatheCircle.classList.toggle("exhale", !state.isInhale);
 	}
 }
