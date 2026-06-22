@@ -1,3 +1,5 @@
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
 const SECONDS_PER_MINUTE = 60;
 const DAILY_GOAL_SECONDS = 8 * 60 * 60;
 const ANALYTICS_STORAGE_KEY = "touchgrass_analytics_v2";
@@ -6,6 +8,8 @@ const FOCUS_TIMER_RUNNING_STORAGE_KEY = "touchgrass_focus_is_running";
 const ANALYTICS_WINDOW_DAYS = 7;
 const DAILY_ALERT_THRESHOLD_SECONDS = 5 * 60 * 60;
 const USAGE_FILL_CLASSES = ["code", "browser", "chat", "music"];
+const LAST_UPDATE_CHECK_KEY = "last_update_check";
+const UPDATE_CHECK_INTERVAL = 10 * 60 * 60 * 1000;
 const FALLBACK_APPS = [
 	{ name: "No data yet", seconds: 1, percent: 100 },
 	{ name: "Keep app open", seconds: 0, percent: 0 },
@@ -13,7 +17,7 @@ const FALLBACK_APPS = [
 	{ name: "Data updates live", seconds: 0, percent: 0 }
 ];
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
 	console.log("App: DOMContentLoaded fired");
 
 	document.addEventListener("dragstart", (event) => event.preventDefault());
@@ -138,6 +142,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		initializeStartupState(state, dom);
 		initializeCloseBehaviorState(state, dom);
 		initializeHourlyNotificationsState(state, dom);
+		await setupUpdateListener();
 	}
 
 	// show embedded popup in the main window
@@ -378,8 +383,8 @@ dom.musicAudio?.addEventListener("error", () => {
 		}
 	});
 
-	if (window.__TAURI__?.event?.listen) {
-		window.__TAURI__.event.listen("tauri://exit", () => {
+	if (listen) {
+		listen("tauri://exit", () => {
 			clearInterval(ticker);
 			clearInterval(clockTicker);
 			if (state.usageAlertTimer) {
@@ -392,14 +397,112 @@ dom.musicAudio?.addEventListener("error", () => {
 	}
 });
 
+function shouldCheckForUpdates() {
+    const lastCheck = localStorage.getItem(LAST_UPDATE_CHECK_KEY);
+
+    if (!lastCheck) {
+        return true;
+    }
+
+    return (Date.now() - Number(lastCheck)) > UPDATE_CHECK_INTERVAL;
+}
+
+function markUpdateCheckCompleted() {
+    localStorage.setItem(LAST_UPDATE_CHECK_KEY, Date.now().toString());
+}
+
+let currentUpdate = null;
+
+async function setupUpdateListener() {
+    await listen(
+        "update://available",
+        (event) => {
+            const update = event.payload;
+
+            showUpdateBanner(update);
+        }
+    );
+
+    await listen(
+        "update://checked",
+        () => {
+            markUpdateCheckCompleted();
+        }
+    );
+
+    await listen(
+        "update://progress",
+        (event) => {
+            const progress = event.payload;
+            const fill = document.getElementById("update-progress-fill");
+            const text = document.getElementById("update-progress-text");
+            if (fill && progress.total) {
+                const pct = Math.round((progress.downloaded / progress.total) * 100);
+                fill.style.width = pct + "%";
+            }
+            if (text && progress.total) {
+                const dm = (progress.downloaded / 1024 / 1024).toFixed(1);
+                const tm = (progress.total / 1024 / 1024).toFixed(1);
+                text.textContent = "Downloading " + dm + " / " + tm + " MB";
+            }
+        }
+    );
+
+    await listen(
+        "update://downloaded",
+        () => {
+            const text = document.getElementById("update-progress-text");
+            if (text) text.textContent = "Download complete. Installing…";
+        }
+    );
+
+    await listen(
+        "update://installed",
+        () => {
+            const banner = document.getElementById("update-banner");
+            const progressContainer = document.getElementById("update-progress-container");
+            if (banner) {
+                banner.innerHTML = '<div><strong>Update installed!</strong><p>Restart TouchGrass to apply the update.</p></div><div class="update-banner-actions"><button id="update-restart-btn">Restart Now</button></div>';
+                banner.classList.remove("hidden");
+            }
+            if (progressContainer) progressContainer.classList.add("hidden");
+            document.getElementById("update-restart-btn")?.addEventListener("click", async () => {
+                try {
+                    await invokeTauri("quit_app");
+                } catch (e) {
+                    window.location.reload();
+                }
+            });
+        }
+    );
+
+    await listen(
+        "update://error",
+        (event) => {
+            const msg = event.payload;
+            const text = document.getElementById("update-progress-text");
+            const btn = document.getElementById("update-btn");
+            const dismissBtn = document.getElementById("update-dismiss-btn");
+            const progressContainer = document.getElementById("update-progress-container");
+            if (text) text.textContent = String(msg);
+            if (btn) {
+                btn.textContent = "Retry Download";
+                btn.disabled = false;
+            }
+            if (dismissBtn) dismissBtn.classList.remove("hidden");
+            if (progressContainer) progressContainer.classList.add("hidden");
+        }
+    );
+}
+
 async function initializeTrackingState(state, dom) {
 	const status = await invokeTauri("get_tracking_status");
 	if (status && typeof status.tracking_enabled === "boolean") {
 		applyTrackingStatus(status.tracking_enabled, state, dom);
 	}
 
-	const tauriEvent = window.__TAURI__?.event;
-	if (!tauriEvent?.listen) return;
+	const tauriEvent = { listen: listen };
+	
 
 	try {
 		state.unsubscribeTrackingListener = await tauriEvent.listen("tracking://status", (event) => {
@@ -436,7 +539,7 @@ async function initializeHourlyNotificationsState(state, dom) {
 async function initializeUsageSync(state, dom) {
 	await refreshUsageSnapshot(state, dom);
 
-	const tauriEvent = window.__TAURI__?.event;
+	const tauriEvent = { listen: listen };
 	if (!tauriEvent?.listen) {
 		state.fallbackInterval = setInterval(() => {
 			refreshUsageSnapshot(state, dom);
@@ -508,6 +611,100 @@ function showUsageAlertToast(message, critical, state, dom) {
 			state.usageAlertTimer = null;
 		}, 220);
 	}, 4200);
+}
+
+function showUpdateBanner(update) {
+    const key = "update_seen_" + update.version;
+
+    if (localStorage.getItem(key)) {
+        return;
+    }
+
+    currentUpdate = update;
+
+    const banner =
+        document.getElementById(
+            "update-banner"
+        );
+
+    const version =
+        document.getElementById(
+            "update-version"
+        );
+
+    const notes =
+        document.getElementById(
+            "update-notes"
+        );
+
+    version.textContent =
+        "Version " + update.version;
+
+    const cleanNotes = update.notes
+        .replaceAll("##", "")
+        .replaceAll("-", "✓");
+
+    notes.textContent = cleanNotes;
+
+    banner.classList.remove(
+        "hidden"
+    );
+
+    const dismissBtn =
+        document.getElementById(
+            "update-dismiss-btn"
+        );
+
+    if (dismissBtn) {
+        dismissBtn.addEventListener(
+            "click",
+            () => {
+                banner.classList.add("hidden");
+                localStorage.setItem(key, "true");
+            }
+        );
+    }
+
+    const downloadBtn =
+        document.getElementById(
+            "update-btn"
+        );
+
+    if (downloadBtn) {
+        downloadBtn.addEventListener(
+            "click",
+            async () => {
+                if (!currentUpdate) return;
+
+                downloadBtn.textContent = "Downloading…";
+                downloadBtn.disabled = true;
+                dismissBtn.classList.add("hidden");
+
+                const progressContainer =
+                    document.getElementById(
+                        "update-progress-container"
+                    );
+
+                progressContainer.classList.remove("hidden");
+
+                try {
+                    await invokeTauri(
+                        "download_and_install_update",
+                        {
+                            version: currentUpdate.version,
+                            notes: currentUpdate.notes,
+                        }
+                    );
+                } catch (error) {
+                    console.warn("Update download failed:", error);
+                    downloadBtn.textContent = "Retry Download";
+                    downloadBtn.disabled = false;
+                    dismissBtn.classList.remove("hidden");
+                    progressContainer.classList.add("hidden");
+                }
+            }
+        );
+    }
 }
 
 function loadAnalyticsArchive() {
@@ -1114,18 +1311,12 @@ function renderArchiveRows(container, days) {
 }
 
 async function invokeTauri(command, args = {}) {
-	const tauriCore = window.__TAURI__?.core;
-	if (!tauriCore?.invoke) {
-		console.warn(`Tauri not available for command: ${command}`);
-		return null;
-	}
-
 	try {
-		return await tauriCore.invoke(command, args);
+		return await invoke(command, args);
 	} catch (error) {
 		console.warn(`Tauri invoke failed for ${command}:`, error);
 		return null;
- 	}
+	}
 }
 
 function getBadgeLabel(name) {

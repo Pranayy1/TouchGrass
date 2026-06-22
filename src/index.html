@@ -60,6 +60,29 @@
 
     <main class="main-area">
       <section class="header-row">
+        <div id="update-banner" class="update-banner hidden">
+  <div>
+    <strong>New Update Available</strong>
+    <p id="update-version"></p>
+    <p id="update-notes"></p>
+  </div>
+
+  <div id="update-progress-container" class="hidden">
+    <div class="update-progress-bar">
+      <div id="update-progress-fill" class="update-progress-fill"></div>
+    </div>
+    <p id="update-progress-text">Downloading...</p>
+  </div>
+
+  <div class="update-banner-actions">
+    <button id="update-btn">
+      Download Update
+    </button>
+    <button id="update-dismiss-btn" aria-label="Dismiss update">
+      Dismiss
+    </button>
+  </div>
+</div>
         <div>
           <h1 id="greeting-text">Good Morning!</h1>
           <p class="status-row"><span class="status-dot"></span><span id="tracking-summary-text">Tracking active PC session</span></p>
@@ -242,12 +265,35 @@
                 </div>
                 <button id="hourly-notifications-toggle-btn" class="btn btn-toggle on" type="button" aria-label="Toggle hourly notifications">Hourly ON</button>
               </div>
+
+              <div class="settings-row">
+                <div>
+                  <p class="settings-title">App Updates</p>
+                  <p class="settings-subtitle" id="update-check-status">Check for new releases on GitHub</p>
+                </div>
+                <button id="update-check-btn" class="btn" type="button" aria-label="Check for updates">Check Now</button>
+              </div>
             </div>
           </article>
         </div>
       </section>
     </main>
   </div>
+
+  <div id="notification-panel" class="notification-panel hidden">
+  <div class="notification-header">
+    <h3>Notifications</h3>
+    <button id="clear-all-notifications" class="clear-btn">
+      Clear All
+    </button>
+  </div>
+
+  <div id="notification-list" class="notification-list">
+    <p class="empty-notification">
+      No notifications yet
+    </p>
+  </div>
+</div>
 
   <div id="breathe-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="breathe-title">
     <div id="breathe-modal-content" class="modal-card">
@@ -286,8 +332,6 @@
   </div>
 
   <div id="usage-alert-toast" class="usage-alert-toast hidden" role="status" aria-live="polite"></div>
-  
-
   <script type="module" src="./main.js"></script>
 </body>
 </html>

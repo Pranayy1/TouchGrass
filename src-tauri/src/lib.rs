@@ -15,6 +15,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_updater::UpdaterExt;
 use chrono::Local;
 
 #[cfg(target_os = "windows")]
@@ -292,6 +293,129 @@ fn set_hourly_notifications(
     }
 
     HourlyNotificationsStatus { enabled }
+}
+#[derive(Clone, Serialize)]
+struct UpdateInfo {
+    version: String,
+    notes: String,
+}
+
+async fn check_updates_background(
+    app: AppHandle,
+) {
+    let update_check_path = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("./data"))
+        .join("last_update_check");
+
+    if update_check_path.exists() {
+        if let Ok(metadata) = fs::metadata(&update_check_path) {
+            if let Ok(modified) = metadata.modified() {
+                if let Ok(elapsed) = modified.elapsed() {
+                    if elapsed.as_secs() < 10 * 60 * 60 {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("updater not available: {e}");
+            return;
+        }
+    };
+
+    let checked = match updater.check().await {
+        Ok(Some(update)) => {
+            let info = UpdateInfo {
+                version: update.version.to_string(),
+                notes: update.body.clone().unwrap_or_default(),
+            };
+
+            let _ = app.emit("update://available", info);
+            true
+        }
+
+        Ok(None) => true,
+
+        Err(e) => {
+            eprintln!("update check failed: {e}");
+            let _ = app.emit("update://checked", ());
+            return;
+        }
+    };
+
+    if checked {
+        let _ = fs::write(&update_check_path, "");
+        let _ = app.emit("update://checked", ());
+    }
+}
+
+#[derive(Clone, Serialize)]
+struct UpdateDownloadProgress {
+    downloaded: u64,
+    total: Option<u64>,
+}
+
+#[tauri::command]
+async fn download_and_install_update(
+    app: AppHandle,
+    _version: String,
+    _notes: String,
+) {
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("updater not available: {e}");
+            let _ = app.emit("update://error", "Updater not available");
+            return;
+        }
+    };
+
+    let update = match updater.check().await {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            let _ = app.emit("update://error", "No update available");
+            return;
+        }
+        Err(e) => {
+            eprintln!("update check failed: {e}");
+            let _ = app.emit("update://error", format!("Update check failed: {e}"));
+            return;
+        }
+    };
+
+    let app_for_progress = app.clone();
+    let result = update
+        .download_and_install(
+            move |downloaded, total| {
+                let _ = app_for_progress.emit(
+                    "update://progress",
+                    UpdateDownloadProgress {
+                        downloaded: downloaded as u64,
+                        total,
+                    },
+                );
+            },
+            || {
+                let _ = app.emit("update://downloaded", ());
+            },
+        )
+        .await;
+
+    match result {
+        Ok(()) => {
+            let _ = app.emit("update://installed", ());
+        }
+        Err(e) => {
+            eprintln!("download/install failed: {e}");
+            let _ = app.emit("update://error", format!("Install failed: {e}"));
+        }
+    }
 }
 
 fn millis_to_seconds(ms: u64) -> u64 {
@@ -793,7 +917,15 @@ pub fn run() {
 
             setup_main_window_behavior(&handle, tracker.clone());
             setup_tray(&handle, tracker.clone())?;
-            track_foreground_apps(tracker, handle);
+            track_foreground_apps(tracker, handle.clone());
+
+            // Updater check disabled until a real endpoint is configured
+            // let updater_handle = handle.clone();
+            // tauri::async_runtime::spawn(async move {
+            //     tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+            //     check_updates_background(updater_handle).await;
+            // });
+
             Ok(())
         })
         .plugin(tauri_plugin_autostart::init(
@@ -802,6 +934,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_usage_snapshot,
             get_tracking_status,
@@ -816,7 +949,8 @@ pub fn run() {
             get_close_behavior,
             set_hide_on_close,
             get_hourly_notifications,
-            set_hourly_notifications
+            set_hourly_notifications,
+            download_and_install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
