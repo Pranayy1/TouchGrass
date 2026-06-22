@@ -33,13 +33,5 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {
-    "updater": {
-      "pubkey": "tqgQkpWrsw4YTdZ0jw7gHMY4uVEGXdxTMz3FX3vocW0=",
-      "endpoints": ["https://github.com/Pranayy1/TouchGrass/releases/latest"], 
-      "windows": {
-        "installMode": "passive"
-      }
-    }
-  }
+  "plugins": {}
 }

@@ -15,7 +15,6 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_notification::NotificationExt;
-use tauri_plugin_updater::UpdaterExt;
 use chrono::Local;
 
 #[cfg(target_os = "windows")]
@@ -294,102 +293,68 @@ fn set_hourly_notifications(
 
     HourlyNotificationsStatus { enabled }
 }
+
+#[derive(Deserialize, Debug)]
+struct GitHubRelease {
+    tag_name: String,
+    body: String,
+    html_url: String,
+}
+
 #[derive(Clone, Serialize)]
 struct UpdateInfo {
     version: String,
     notes: String,
+    release_url: String,
 }
 
-#[derive(Clone, Serialize)]
-struct UpdateDownloadProgress {
-    downloaded: u64,
-    total: Option<u64>,
+fn strip_v_prefix(version: &str) -> String {
+    version.strip_prefix('v').unwrap_or(version).to_string()
 }
 
-#[tauri::command]
-async fn check_for_updates(app: AppHandle) {
-    let updater = match app.updater() {
-        Ok(u) => u,
-        Err(e) => {
-            eprintln!("updater not available: {e}");
-            let _ = app.emit("update://error", "Updater not available");
-            return;
-        }
-    };
+fn version_tuple(version: &str) -> Vec<u32> {
+    strip_v_prefix(version)
+        .split('.')
+        .map(|s| s.parse::<u32>().unwrap_or(0))
+        .collect()
+}
 
-    match updater.check().await {
-        Ok(Some(update)) => {
-            let info = UpdateInfo {
-                version: update.version.to_string(),
-                notes: update.body.clone().unwrap_or_default(),
-            };
-            let _ = app.emit("update://available", info);
-        }
-        Ok(None) => {
-            let _ = app.emit("update://checked", ());
-        }
-        Err(e) => {
-            eprintln!("update check failed: {e}");
-            let _ = app.emit("update://error", format!("Update check failed: {e}"));
-        }
-    }
+fn is_newer(latest: &str, current: &str) -> bool {
+    version_tuple(latest) > version_tuple(current)
 }
 
 #[tauri::command]
-async fn download_and_install_update(
-    app: AppHandle,
-    _version: String,
-    _notes: String,
-) {
-    let updater = match app.updater() {
-        Ok(u) => u,
-        Err(e) => {
-            eprintln!("updater not available: {e}");
-            let _ = app.emit("update://error", "Updater not available");
-            return;
-        }
-    };
+async fn check_for_updates(app: AppHandle) -> Result<(), String> {
+    let client = reqwest::Client::builder()
+        .user_agent("TouchGrass")
+        .build()
+        .map_err(|e| format!("HTTP client build failed: {e}"))?;
 
-    let update = match updater.check().await {
-        Ok(Some(u)) => u,
-        Ok(None) => {
-            let _ = app.emit("update://error", "No update available");
-            return;
-        }
-        Err(e) => {
-            eprintln!("update check failed: {e}");
-            let _ = app.emit("update://error", format!("Update check failed: {e}"));
-            return;
-        }
-    };
+    let release = client
+        .get("https://api.github.com/repos/Pranayy1/TouchGrass/releases/latest")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("GitHub API returned error: {e}"))?
+        .json::<GitHubRelease>()
+        .await
+        .map_err(|e| format!("JSON parse failed: {e}"))?;
 
-    let app_for_progress = app.clone();
-    let result = update
-        .download_and_install(
-            move |downloaded, total| {
-                let _ = app_for_progress.emit(
-                    "update://progress",
-                    UpdateDownloadProgress {
-                        downloaded: downloaded as u64,
-                        total,
-                    },
-                );
-            },
-            || {
-                let _ = app.emit("update://downloaded", ());
-            },
-        )
-        .await;
-
-    match result {
-        Ok(()) => {
-            let _ = app.emit("update://installed", ());
-        }
-        Err(e) => {
-            eprintln!("download/install failed: {e}");
-            let _ = app.emit("update://error", format!("Install failed: {e}"));
-        }
+    let current = env!("CARGO_PKG_VERSION");
+    if is_newer(&release.tag_name, current) {
+        let info = UpdateInfo {
+            version: strip_v_prefix(&release.tag_name),
+            notes: release.body,
+            release_url: release.html_url,
+        };
+        let _ = app.emit("update://available", info);
+    } else {
+        let _ = app.emit("update://checked", ());
     }
+
+    Ok(())
 }
 
 fn millis_to_seconds(ms: u64) -> u64 {
@@ -901,7 +866,6 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_usage_snapshot,
             get_tracking_status,
@@ -917,8 +881,7 @@ pub fn run() {
             set_hide_on_close,
             get_hourly_notifications,
             set_hourly_notifications,
-            check_for_updates,
-            download_and_install_update
+            check_for_updates
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

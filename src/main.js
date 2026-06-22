@@ -450,6 +450,13 @@ async function setupUpdateListener() {
         "update://checked",
         () => {
             markUpdateCheckCompleted();
+            const status = document.getElementById("update-check-status");
+            if (status) status.textContent = "You're up to date!";
+            const banner = document.getElementById("update-banner");
+            if (banner) {
+                banner.innerHTML = '<div><strong>Up to date!</strong><p>You are running the latest version of TouchGrass.</p></div>';
+                banner.classList.remove("hidden");
+            }
         }
     );
 
@@ -669,6 +676,20 @@ function showUpdateBanner(update) {
 
     notes.textContent = cleanNotes;
 
+    const releaseUrl = update.release_url;
+    if (releaseUrl) {
+        const existingLink = banner.querySelector(".release-link");
+        if (existingLink) existingLink.remove();
+        const linkBtn = document.createElement("a");
+        linkBtn.href = releaseUrl;
+        linkBtn.target = "_blank";
+        linkBtn.rel = "noopener noreferrer";
+        linkBtn.className = "btn btn-primary release-link";
+        linkBtn.textContent = "View Release";
+        linkBtn.style.marginTop = "8px";
+        banner.appendChild(linkBtn);
+    }
+
     banner.classList.remove(
         "hidden"
     );
@@ -710,20 +731,12 @@ function showUpdateBanner(update) {
 
                 progressContainer.classList.remove("hidden");
 
-                try {
-                    await invokeTauri(
-                        "download_and_install_update",
-                        {
-                            version: currentUpdate.version,
-                            notes: currentUpdate.notes,
-                        }
-                    );
-                } catch (error) {
-                    console.warn("Update download failed:", error);
-                    downloadBtn.textContent = "Retry Download";
-                    downloadBtn.disabled = false;
-                    dismissBtn.classList.remove("hidden");
-                    progressContainer.classList.add("hidden");
+                if (currentUpdate.release_url) {
+                    window.open(currentUpdate.release_url, "_blank", "noopener,noreferrer");
+                } else {
+                    console.warn("No release URL available");
+                    downloadBtn.textContent = "Unavailable";
+                    downloadBtn.disabled = true;
                 }
             }
         );
