@@ -59,4 +59,4 @@ Built with Tauri, Rust, and vanilla HTML/CSS/JS.
 
 ## Download
 
-Head to the [Releases](https://github.com/Pranayy1/TouchGrass/releases) page to download the latest installer.
+Head to the [Releases](https://github.com/Pranayy1/TouchGrass/releases) or [Website](https://pranayy1.github.io/touchgrass-site/) page to download the latest installer.
