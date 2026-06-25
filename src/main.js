@@ -1,5 +1,7 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
+
+
 const SECONDS_PER_MINUTE = 60;
 const DAILY_GOAL_SECONDS = 8 * 60 * 60;
 const ANALYTICS_STORAGE_KEY = "touchgrass_analytics_v2";
@@ -275,15 +277,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 	console.log("[UPDATE] Button found:", dom.updateCheckBtn);
 		dom.updateCheckBtn?.addEventListener("click", async () => {
-			console.log("[UPDATE] Check Now clicked — forcing immediate check");
+			console.log("[UPDATE] Check Now clicked");
 			const status = document.getElementById("update-check-status");
+			const banner = document.getElementById("update-banner");
 			if (status) status.textContent = "Checking for updates...";
+			if (banner) banner.classList.add("hidden");
 			try {
-				await invokeTauri("check_for_updates");
-				console.log("[UPDATE] Rust command completed");
+				const result = await invoke("check_for_updates");
+				console.log("[UPDATE] check_for_updates returned:", result);
+				// Event listeners will handle the UI response (update://checked or update://available)
+				// If no event fires within 15s, show a timeout message
+				setTimeout(() => {
+					if (status && status.textContent === "Checking for updates...") {
+						status.textContent = "Update check timed out. Please check your internet connection.";
+					}
+				}, 15000);
 			} catch (error) {
-				console.error("[UPDATE] Rust command failed", error);
-				if (status) status.textContent = "Update check failed";
+				console.error("[UPDATE] check_for_updates FAILED:", error);
+				if (status) status.textContent = "Update check failed: " + String(error);
 			}
 		});
 
@@ -433,92 +444,77 @@ function markUpdateCheckCompleted() {
 let currentUpdate = null;
 
 async function setupUpdateListener() {
-    await listen(
-        "update://available",
-        (event) => {
-            const update = event.payload;
+    await listen("update://available", (event) => {
+        console.log("[UPDATE] update://available event received:", event.payload);
+        markUpdateCheckCompleted();
+        showUpdateBanner(event.payload);
+    });
 
-            showUpdateBanner(update);
+    await listen("update://checked", () => {
+        console.log("[UPDATE] update://checked event received");
+        markUpdateCheckCompleted();
+        const status = document.getElementById("update-check-status");
+        if (status) status.textContent = "You're up to date!";
+        const banner = document.getElementById("update-banner");
+        if (banner) {
+            banner.innerHTML = '<div><strong>Up to date!</strong><p>You are running the latest version of TouchGrass.</p></div>';
+            banner.classList.remove("hidden");
         }
-    );
+    });
 
-    await listen(
-        "update://checked",
-        () => {
-            markUpdateCheckCompleted();
-            const status = document.getElementById("update-check-status");
-            if (status) status.textContent = "You're up to date!";
-            const banner = document.getElementById("update-banner");
-            if (banner) {
-                banner.innerHTML = '<div><strong>Up to date!</strong><p>You are running the latest version of TouchGrass.</p></div>';
-                banner.classList.remove("hidden");
+    await listen("update://progress", (event) => {
+        console.log("[UPDATE] update://progress event received:", event.payload);
+        const progress = event.payload;
+        const fill = document.getElementById("update-progress-fill");
+        const text = document.getElementById("update-progress-text");
+        if (fill && progress.total) {
+            const pct = Math.round((progress.downloaded / progress.total) * 100);
+            fill.style.width = pct + "%";
+        }
+        if (text && progress.total) {
+            const dm = (progress.downloaded / 1024 / 1024).toFixed(1);
+            const tm = (progress.total / 1024 / 1024).toFixed(1);
+            text.textContent = "Downloading " + dm + " / " + tm + " MB";
+        }
+    });
+
+    await listen("update://downloaded", () => {
+        const text = document.getElementById("update-progress-text");
+        if (text) text.textContent = "Download complete. Installing…";
+    });
+
+    await listen("update://installed", () => {
+        const banner = document.getElementById("update-banner");
+        const progressContainer = document.getElementById("update-progress-container");
+        if (banner) {
+            banner.innerHTML = '<div><strong>Update installed!</strong><p>Restart TouchGrass to apply the update.</p></div><div class="update-banner-actions"><button id="update-restart-btn">Restart Now</button></div>';
+            banner.classList.remove("hidden");
+        }
+        if (progressContainer) progressContainer.classList.add("hidden");
+        document.getElementById("update-restart-btn")?.addEventListener("click", async () => {
+            try {
+                await invokeTauri("quit_app");
+            } catch (e) {
+                window.location.reload();
             }
-        }
-    );
+        });
+    });
 
-    await listen(
-        "update://progress",
-        (event) => {
-            const progress = event.payload;
-            const fill = document.getElementById("update-progress-fill");
-            const text = document.getElementById("update-progress-text");
-            if (fill && progress.total) {
-                const pct = Math.round((progress.downloaded / progress.total) * 100);
-                fill.style.width = pct + "%";
-            }
-            if (text && progress.total) {
-                const dm = (progress.downloaded / 1024 / 1024).toFixed(1);
-                const tm = (progress.total / 1024 / 1024).toFixed(1);
-                text.textContent = "Downloading " + dm + " / " + tm + " MB";
-            }
+    await listen("update://error", (event) => {
+        console.log("[UPDATE] update://error event received:", event.payload);
+        const msg = event.payload;
+        const text = document.getElementById("update-progress-text");
+        const btn = document.getElementById("update-btn");
+        const dismissBtn = document.getElementById("update-dismiss-btn");
+        const progressContainer = document.getElementById("update-progress-container");
+        if (text) text.textContent = String(msg);
+        if (btn) {
+            btn.textContent = "Retry Download";
+            btn.disabled = false;
         }
-    );
-
-    await listen(
-        "update://downloaded",
-        () => {
-            const text = document.getElementById("update-progress-text");
-            if (text) text.textContent = "Download complete. Installing…";
-        }
-    );
-
-    await listen(
-        "update://installed",
-        () => {
-            const banner = document.getElementById("update-banner");
-            const progressContainer = document.getElementById("update-progress-container");
-            if (banner) {
-                banner.innerHTML = '<div><strong>Update installed!</strong><p>Restart TouchGrass to apply the update.</p></div><div class="update-banner-actions"><button id="update-restart-btn">Restart Now</button></div>';
-                banner.classList.remove("hidden");
-            }
-            if (progressContainer) progressContainer.classList.add("hidden");
-            document.getElementById("update-restart-btn")?.addEventListener("click", async () => {
-                try {
-                    await invokeTauri("quit_app");
-                } catch (e) {
-                    window.location.reload();
-                }
-            });
-        }
-    );
-
-    await listen(
-        "update://error",
-        (event) => {
-            const msg = event.payload;
-            const text = document.getElementById("update-progress-text");
-            const btn = document.getElementById("update-btn");
-            const dismissBtn = document.getElementById("update-dismiss-btn");
-            const progressContainer = document.getElementById("update-progress-container");
-            if (text) text.textContent = String(msg);
-            if (btn) {
-                btn.textContent = "Retry Download";
-                btn.disabled = false;
-            }
-            if (dismissBtn) dismissBtn.classList.remove("hidden");
-            if (progressContainer) progressContainer.classList.add("hidden");
-        }
-    );
+        if (dismissBtn) dismissBtn.classList.remove("hidden");
+        if (progressContainer) progressContainer.classList.add("hidden");
+    });
 
     // Auto-check on startup (rate-limited)
     if (shouldCheckForUpdates()) {
@@ -645,13 +641,8 @@ function showUsageAlertToast(message, critical, state, dom) {
 }
 
 function showUpdateBanner(update) {
-    const key = "update_seen_" + update.version;
-
-    if (localStorage.getItem(key)) {
-        return;
-    }
-
     currentUpdate = update;
+    localStorage.removeItem("update_seen_" + update.version);
 
     const banner =
         document.getElementById(
@@ -705,7 +696,6 @@ function showUpdateBanner(update) {
             "click",
             () => {
                 banner.classList.add("hidden");
-                localStorage.setItem(key, "true");
             }
         );
     }
@@ -716,6 +706,8 @@ function showUpdateBanner(update) {
         );
 
     if (downloadBtn) {
+        downloadBtn.textContent = "Download";
+        downloadBtn.disabled = false;
         downloadBtn.addEventListener(
             "click",
             async () => {
