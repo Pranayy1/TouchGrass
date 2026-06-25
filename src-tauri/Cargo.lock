@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "TouchGrass"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "chrono",
  "reqwest",
@@ -16,6 +16,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tokio",
+ "uuid",
  "windows-sys 0.59.0",
 ]
 

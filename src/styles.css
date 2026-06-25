@@ -1618,6 +1618,61 @@ input[type="range"]:focus-visible {
   font-size: 11px;
 }
 
+.notification-card {
+  position: relative;
+  padding: 10px 32px 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-card:last-child {
+  border-bottom: none;
+}
+
+.notification-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.notification-delete-btn:hover {
+  color: var(--danger);
+  opacity: 1;
+}
+
+.notification-card-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 2px;
+  padding-right: 8px;
+}
+
+.notification-card-message {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.notification-card-time {
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
 /* ─── UPDATE BANNER (NON-INTRUSIVE TOAST) ─── */
 
 .update-banner {

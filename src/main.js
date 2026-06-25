@@ -73,6 +73,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 		focusPopoutBtn: document.getElementById("focus-popout-btn"),
 		focusResetBtn: document.getElementById("focus-reset-btn"),
 		notificationBtn: document.getElementById("notification-btn"),
+		notificationPanel: document.getElementById("notification-panel"),
 		updateCheckBtn: document.getElementById("update-check-btn"),
 		notificationBadge: document.getElementById("notification-badge"),
 		modal: document.getElementById("breathe-modal"),
@@ -114,7 +115,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 		focusDurationMinutes: 25,
 		fiveHourAlertShown: false,
 		alertDayKey: getTodayKey(),
-		usageAlertTimer: null
+		usageAlertTimer: null,
+		notifications: []
 	};
 
 	const todayRecord = state.analyticsArchive.days.find((entry) => entry.dateKey === getTodayKey());
@@ -135,7 +137,131 @@ document.addEventListener("DOMContentLoaded", async () => {
 		dom.focusMinuteCustom.max = "240";
 	}
 
+	function formatRelativeTime(unixTimestamp) {
+		const now = Math.floor(Date.now() / 1000);
+		const diff = now - unixTimestamp;
 
+		if (diff < 60) return "Just now";
+		if (diff < 3600) {
+			const mins = Math.floor(diff / 60);
+			return `${mins} min${mins === 1 ? "" : "s"} ago`;
+		}
+		if (diff < 86400) {
+			const hours = Math.floor(diff / 3600);
+			return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+		}
+		const days = Math.floor(diff / 86400);
+		if (days === 1) return "Yesterday";
+		return `${days} days ago`;
+	}
+
+	async function loadNotifications() {
+		try {
+			const result = await invoke("get_notifications");
+			state.notifications = Array.isArray(result) ? result : [];
+		} catch (error) {
+			console.warn("Failed to load notifications:", error);
+			state.notifications = [];
+		}
+		renderNotifications();
+		updateNotificationBadge();
+	}
+
+	function closeFloatingPanels() {
+		dom.notificationPanel?.classList.add("hidden");
+		const updateBanner = document.getElementById("update-banner");
+		if (updateBanner) updateBanner.classList.add("hidden");
+	}
+
+	function setupNotificationListener() {
+		if (!window.__TAURI__?.event?.listen) return;
+		window.__TAURI__.event.listen("notification://added", () => {
+			loadNotifications();
+		});
+	}
+
+	function setupNotificationDeletion() {
+		const list = dom.notificationList;
+		if (!list) return;
+		list.addEventListener("click", async (e) => {
+			const btn = e.target.closest(".notification-delete-btn");
+			if (!btn) return;
+			e.stopPropagation();
+			const id = btn.dataset.deleteId;
+			if (!id) return;
+			try {
+				await invoke("delete_notification", { id });
+			} catch (error) {
+				console.warn("Failed to delete notification:", error);
+			}
+			loadNotifications();
+		});
+	}
+
+	function setupClearAll() {
+		const btn = document.getElementById("clear-all-notifications");
+		if (!btn) return;
+		btn.addEventListener("click", async () => {
+			if (!state.notifications || state.notifications.length === 0) return;
+			const confirmed = window.confirm("Delete all notifications?");
+			if (!confirmed) return;
+			btn.disabled = true;
+			btn.textContent = "Clearing...";
+			try {
+				await invoke("clear_notifications");
+			} catch (error) {
+				console.warn("Failed to clear notifications:", error);
+			} finally {
+				btn.disabled = false;
+				btn.textContent = "Clear All";
+			}
+			loadNotifications();
+		});
+	}
+
+	function renderNotifications() {
+		const list = dom.notificationList;
+		if (!list) return;
+
+		const entries = state.notifications;
+		if (!entries || entries.length === 0) {
+			list.innerHTML = '<p class="empty-notification">No notifications yet</p>';
+			return;
+		}
+
+		list.innerHTML = entries.map((n) => {
+			const timeAgo = formatRelativeTime(n.timestamp);
+			const title = escapeHtml(n.title || "");
+			const message = escapeHtml(n.message || "");
+			return `
+				<div class="notification-card" data-notification-id="${escapeHtml(n.id)}">
+					<button class="notification-delete-btn" aria-label="Delete notification" data-delete-id="${escapeHtml(n.id)}">&times;</button>
+					<div class="notification-card-title">${title}</div>
+					<div class="notification-card-message">${message}</div>
+					<div class="notification-card-time">${timeAgo}</div>
+				</div>
+			`;
+		}).join("");
+	}
+
+	function escapeHtml(str) {
+		const div = document.createElement("div");
+		div.textContent = str;
+		return div.innerHTML;
+	}
+
+	function updateNotificationBadge() {
+		const badge = dom.notificationBadge;
+		if (!badge) return;
+		const count = state.notifications.length;
+		if (count === 0) {
+			badge.classList.add("hidden");
+			badge.textContent = "";
+		} else {
+			badge.textContent = count > 99 ? "99+" : String(count);
+			badge.classList.remove("hidden");
+		}
+	}
 
 	bindPageNavigation(state, dom);
 	renderUsage(dom.appUsageContainer, FALLBACK_APPS);
@@ -155,6 +281,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 	updateClockAndGreeting(dom);
 	renderTime(state, dom);
 	renderFocus(state, dom);
+	loadNotifications();
+	setupNotificationListener();
+	setupNotificationDeletion();
+	setupClearAll();
 
 	// Start/Pause/Resume button inside the main app
 	dom.focusStartBtn?.addEventListener("click", () => {
@@ -275,7 +405,37 @@ document.addEventListener("DOMContentLoaded", async () => {
 		}
 	});
 
-	console.log("[UPDATE] Button found:", dom.updateCheckBtn);
+	dom.notificationBtn?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const panel = dom.notificationPanel;
+			if (!panel) return;
+			const isOpening = panel.classList.contains("hidden");
+			if (isOpening) {
+				closeFloatingPanels();
+				panel.classList.remove("hidden");
+				loadNotifications();
+			} else {
+				panel.classList.add("hidden");
+			}
+		});
+
+		document.addEventListener("click", (e) => {
+			if (
+				!dom.notificationPanel?.classList.contains("hidden") &&
+				!dom.notificationPanel?.contains(e.target) &&
+				!dom.notificationBtn?.contains(e.target)
+			) {
+				dom.notificationPanel.classList.add("hidden");
+			}
+		});
+
+		document.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && !dom.notificationPanel?.classList.contains("hidden")) {
+				dom.notificationPanel.classList.add("hidden");
+			}
+		});
+
+		console.log("[UPDATE] Button found:", dom.updateCheckBtn);
 		dom.updateCheckBtn?.addEventListener("click", async () => {
 			console.log("[UPDATE] Check Now clicked");
 			const status = document.getElementById("update-check-status");
@@ -457,6 +617,7 @@ async function setupUpdateListener() {
         if (status) status.textContent = "You're up to date!";
         const banner = document.getElementById("update-banner");
         if (banner) {
+            closeFloatingPanels();
             banner.innerHTML = '<div><strong>Up to date!</strong><p>You are running the latest version of TouchGrass.</p></div>';
             banner.classList.remove("hidden");
         }
@@ -487,6 +648,7 @@ async function setupUpdateListener() {
         const banner = document.getElementById("update-banner");
         const progressContainer = document.getElementById("update-progress-container");
         if (banner) {
+            closeFloatingPanels();
             banner.innerHTML = '<div><strong>Update installed!</strong><p>Restart TouchGrass to apply the update.</p></div><div class="update-banner-actions"><button id="update-restart-btn">Restart Now</button></div>';
             banner.classList.remove("hidden");
         }

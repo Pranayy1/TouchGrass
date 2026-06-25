@@ -27,6 +27,25 @@ use windows_sys::Win32::{
     UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
 };
 
+#[derive(Clone, Serialize, Deserialize)]
+struct NotificationEntry {
+    id: String,
+    title: String,
+    message: String,
+    timestamp: i64,
+}
+
+impl Default for NotificationEntry {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            title: String::new(),
+            message: String::new(),
+            timestamp: 0,
+        }
+    }
+}
+
 #[derive(Default, Serialize, Deserialize)]
 #[serde(default)]
 struct TrackerState {
@@ -41,6 +60,8 @@ struct TrackerState {
     hourly_notifications_sent: BTreeSet<u64>,
     #[serde(default = "default_hourly_notifications_enabled")]
     hourly_notifications_enabled: bool,
+    #[serde(default)]
+    notifications: Vec<NotificationEntry>,
 }
 
 fn default_hourly_notifications_enabled() -> bool {
@@ -294,6 +315,58 @@ fn set_hourly_notifications(
     HourlyNotificationsStatus { enabled }
 }
 
+#[tauri::command]
+fn get_notifications(state: State<'_, TrackerHandle>) -> Vec<NotificationEntry> {
+    let Ok(tracker) = state.0.lock() else {
+        return Vec::new();
+    };
+
+    let mut notifications = tracker.notifications.clone();
+    notifications.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    notifications
+}
+
+#[tauri::command]
+fn delete_notification(id: String, state: State<'_, TrackerHandle>, app: AppHandle) {
+    let Ok(mut tracker) = state.0.lock() else {
+        return;
+    };
+
+    tracker.notifications.retain(|n| n.id != id);
+    let _ = save_state(&tracker, &app);
+}
+
+#[tauri::command]
+fn clear_notifications(state: State<'_, TrackerHandle>, app: AppHandle) {
+    let Ok(mut tracker) = state.0.lock() else {
+        return;
+    };
+
+    tracker.notifications.clear();
+    let _ = save_state(&tracker, &app);
+}
+
+#[tauri::command]
+fn timer_completed(
+    minutes: u32,
+    state: State<'_, TrackerHandle>,
+    app: AppHandle,
+) {
+    if minutes == 0 {
+        return;
+    }
+
+    notify_and_store(
+        &state.0,
+        &app,
+        "Focus Timer Completed",
+        &format!(
+            "You successfully completed a {} minute focus session.",
+            minutes
+        ),
+    );
+}
+
 #[derive(Deserialize, Debug)]
 struct GitHubRelease {
     tag_name: String,
@@ -414,20 +487,49 @@ fn send_system_notification(app: &AppHandle, title: &str, body: &str) {
         .show();
 }
 
-fn process_usage_alerts(state: &mut TrackerState, app: &AppHandle) {
+fn notify_and_store(
+    tracker: &Arc<Mutex<TrackerState>>,
+    app: &AppHandle,
+    title: &str,
+    message: &str,
+) {
+    let entry = NotificationEntry {
+        id: uuid::Uuid::new_v4().to_string(),
+        title: title.to_string(),
+        message: message.to_string(),
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    if let Ok(mut state) = tracker.lock() {
+        state.notifications.push(entry.clone());
+        if let Err(error) = save_state(&state, app) {
+            eprintln!("failed to save notification: {error}");
+        }
+        let _ = app.emit("notification://added", entry);
+    }
+
+    send_system_notification(app, title, message);
+}
+
+fn process_usage_alerts(
+    state: &mut TrackerState,
+    app: AppHandle,
+    tracker: Arc<Mutex<TrackerState>>,
+) {
     let total_seconds = millis_to_seconds(state.total_millis);
     let completed_hours = total_seconds / 3600;
 
     if completed_hours > state.processed_hours {
-        let tray_mode = is_running_in_tray(app);
+        let tray_mode = is_running_in_tray(&app);
 
         for hour in (state.processed_hours + 1)..=completed_hours {
             if state.hourly_notifications_enabled
                 && tray_mode
                 && !state.hourly_notifications_sent.contains(&hour)
             {
-                send_system_notification(
-                    app,
+                notify_and_store(
+                    &tracker,
+                    &app,
                     "TouchGrass Hourly Usage",
                     &format!("You have used your PC for {} hour{} today.", hour, if hour == 1 { "" } else { "s" }),
                 );
@@ -449,7 +551,7 @@ fn process_usage_alerts(state: &mut TrackerState, app: &AppHandle) {
         };
 
         let _ = app.emit("usage://alert", alert.clone());
-        send_system_notification(app, "TouchGrass Usage Alert", &alert.message);
+        notify_and_store(&tracker, &app, "TouchGrass Usage Alert", &alert.message);
     }
 }
 
@@ -518,7 +620,7 @@ tick_count += 1;
                         let counter = state.per_app_millis.entry(credited_app).or_insert(0);
                         *counter += elapsed;
                     }
-                    process_usage_alerts(&mut state, &app);
+                    process_usage_alerts(&mut state, app.clone(), shared.clone());
                   
 
                     if changed || last_emit.elapsed() >= Duration::from_secs(8) {
@@ -645,6 +747,16 @@ fn load_state(app: &AppHandle) -> Result<TrackerState, Box<dyn std::error::Error
     
     let json = fs::read_to_string(&path)?;
     let mut state: TrackerState = serde_json::from_str(&json)?;
+
+    let now = chrono::Utc::now().timestamp();
+    let max_age = 86400;
+    let original_len = state.notifications.len();
+    state.notifications
+        .retain(|n| now - n.timestamp <= max_age);
+    if state.notifications.len() != original_len {
+        save_state(&state, app)?;
+    }
+
     let calculated_total: u64 =
     state.per_app_millis.values().sum();
 
@@ -881,6 +993,10 @@ pub fn run() {
             set_hide_on_close,
             get_hourly_notifications,
             set_hourly_notifications,
+            get_notifications,
+            delete_notification,
+            clear_notifications,
+            timer_completed,
             check_for_updates
         ])
         .run(tauri::generate_context!())
