@@ -1620,12 +1620,23 @@ input[type="range"]:focus-visible {
 
 .notification-card {
   position: relative;
-  padding: 10px 32px 10px 12px;
+  padding: 10px 32px 10px 16px;
   border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .notification-card:last-child {
   border-bottom: none;
+}
+
+.notification-card-unread {
+  background: rgba(59, 130, 246, 0.06);
+  border-left-color: #3b82f6;
+}
+
+.notification-card-unread .notification-card-title {
+  font-weight: 700;
 }
 
 .notification-delete-btn {

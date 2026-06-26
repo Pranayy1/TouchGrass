@@ -180,6 +180,45 @@ document.addEventListener("DOMContentLoaded", async () => {
 		});
 	}
 
+	function setupReadEventListener() {
+		if (!window.__TAURI__?.event?.listen) return;
+		window.__TAURI__.event.listen("notification://read", () => {
+			loadNotifications();
+		});
+	}
+
+	let markAllReadTimeout = null;
+
+	function setupMarkAllRead() {
+		const panel = dom.notificationPanel;
+		if (!panel) return;
+
+		const observer = new MutationObserver(() => {
+			if (panel.classList.contains("hidden")) {
+				if (markAllReadTimeout) {
+					clearTimeout(markAllReadTimeout);
+					markAllReadTimeout = null;
+				}
+				return;
+			}
+			if (markAllReadTimeout) return;
+			if (countUnread() === 0) return;
+			markAllReadTimeout = setTimeout(async () => {
+				markAllReadTimeout = null;
+				if (!panel.classList.contains("hidden")) {
+					try {
+						await invoke("mark_all_notifications_read");
+					} catch (error) {
+						console.warn("Failed to mark all as read:", error);
+					}
+					loadNotifications();
+				}
+			}, 400);
+		});
+
+		observer.observe(panel, { attributes: true, attributeFilter: ["class"] });
+	}
+
 	function setupNotificationDeletion() {
 		const list = dom.notificationList;
 		if (!list) return;
@@ -233,8 +272,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 			const timeAgo = formatRelativeTime(n.timestamp);
 			const title = escapeHtml(n.title || "");
 			const message = escapeHtml(n.message || "");
+			const isUnread = n.read_at === null;
 			return `
-				<div class="notification-card" data-notification-id="${escapeHtml(n.id)}">
+				<div class="notification-card${isUnread ? " notification-card-unread" : ""}" data-notification-id="${escapeHtml(n.id)}">
 					<button class="notification-delete-btn" aria-label="Delete notification" data-delete-id="${escapeHtml(n.id)}">&times;</button>
 					<div class="notification-card-title">${title}</div>
 					<div class="notification-card-message">${message}</div>
@@ -250,10 +290,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 		return div.innerHTML;
 	}
 
+	function countUnread() {
+		const entries = state.notifications;
+		if (!entries) return 0;
+		let count = 0;
+		for (let i = 0; i < entries.length; i++) {
+			if (entries[i].read_at === null) count++;
+		}
+		return count;
+	}
+
 	function updateNotificationBadge() {
 		const badge = dom.notificationBadge;
 		if (!badge) return;
-		const count = state.notifications.length;
+		const count = countUnread();
 		if (count === 0) {
 			badge.classList.add("hidden");
 			badge.textContent = "";
@@ -283,8 +333,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 	renderFocus(state, dom);
 	loadNotifications();
 	setupNotificationListener();
+	setupReadEventListener();
 	setupNotificationDeletion();
 	setupClearAll();
+	setupMarkAllRead();
 
 	// Start/Pause/Resume button inside the main app
 	dom.focusStartBtn?.addEventListener("click", () => {

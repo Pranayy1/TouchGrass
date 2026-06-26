@@ -33,6 +33,8 @@ struct NotificationEntry {
     title: String,
     message: String,
     timestamp: i64,
+    #[serde(default)]
+    read_at: Option<i64>,
 }
 
 impl Default for NotificationEntry {
@@ -42,6 +44,7 @@ impl Default for NotificationEntry {
             title: String::new(),
             message: String::new(),
             timestamp: 0,
+            read_at: None,
         }
     }
 }
@@ -367,6 +370,52 @@ fn timer_completed(
     );
 }
 
+#[tauri::command]
+fn mark_notification_read(id: String, state: State<'_, TrackerHandle>, app: AppHandle) {
+    let Ok(mut tracker) = state.0.lock() else {
+        return;
+    };
+
+    let now = chrono::Utc::now().timestamp();
+    let mut changed = false;
+    for notification in &mut tracker.notifications {
+        if notification.id == id && notification.read_at.is_none() {
+            notification.read_at = Some(now);
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return;
+    }
+
+    let _ = save_state(&tracker, &app);
+    let _ = app.emit("notification://read", ());
+}
+
+#[tauri::command]
+fn mark_all_notifications_read(state: State<'_, TrackerHandle>, app: AppHandle) {
+    let Ok(mut tracker) = state.0.lock() else {
+        return;
+    };
+
+    let now = chrono::Utc::now().timestamp();
+    let mut changed = false;
+    for notification in &mut tracker.notifications {
+        if notification.read_at.is_none() {
+            notification.read_at = Some(now);
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return;
+    }
+
+    let _ = save_state(&tracker, &app);
+    let _ = app.emit("notification://read", ());
+}
+
 #[derive(Deserialize, Debug)]
 struct GitHubRelease {
     tag_name: String,
@@ -498,6 +547,7 @@ fn notify_and_store(
         title: title.to_string(),
         message: message.to_string(),
         timestamp: chrono::Utc::now().timestamp(),
+        read_at: None,
     };
 
     if let Ok(mut state) = tracker.lock() {
@@ -997,6 +1047,8 @@ pub fn run() {
             delete_notification,
             clear_notifications,
             timer_completed,
+            mark_notification_read,
+            mark_all_notifications_read,
             check_for_updates
         ])
         .run(tauri::generate_context!())
