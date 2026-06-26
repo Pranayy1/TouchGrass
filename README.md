@@ -1,13 +1,20 @@
 # 🌿 TouchGrass
 
-**A privacy-first Windows desktop app that helps you build healthier digital habits.**
+**A lightweight, privacy-first Windows desktop app that helps you understand and improve your digital habits.**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D4.svg)](https://github.com/Pranayy1/TouchGrass/releases)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-FFC131.svg)](https://v2.tauri.app/)
 [![Rust](https://img.shields.io/badge/Rust-1.76+-dea584.svg)](https://www.rust-lang.org/)
+[![GitHub Release](https://img.shields.io/github/v/release/Pranayy1/TouchGrass?color=blue)](https://github.com/Pranayy1/TouchGrass/releases)
+[![Official Website](https://img.shields.io/badge/official%20website-GitHub%20Pages-0078D4.svg)](https://pranayy1.github.io/touchgrass-site/)
 
-TouchGrass runs quietly in your system tray, tracking your screen time and app usage — entirely locally. No cloud. No account. No telemetry.
+<!-- TODO: Replace with README_assets/banner.png or README_assets/demo.gif -->
+<p align="center">
+  <img src="./src/assets/image.png" alt="TouchGrass Preview" width="900">
+</p>
+
+TouchGrass is a modern, local-first Windows desktop application built with Rust and Tauri v2. It runs quietly in your system tray, tracking your screen time and per-application usage — entirely locally. No cloud. No account. No telemetry. No ads.
 
 ---
 
@@ -71,24 +78,26 @@ Whether you are a developer, student, or knowledge worker, TouchGrass gives you 
 
 ## 📸 Screenshots
 
-> Screenshots will be added in a future update.
+> Screenshots showcasing the Dashboard, Focus Timer, Notification Center, and Analytics views will be added after the next stable release.
 
 ---
 
 ## 🎥 Demo
 
-> A demo GIF/video will be added in a future update.
+> An animated walkthrough GIF will be added in a future release.
 
 ---
 
 ## 📥 Download
 
-| Source | Link |
-|--------|------|
-| GitHub Releases | [github.com/Pranayy1/TouchGrass/releases](https://github.com/Pranayy1/TouchGrass/releases) |
-| Website | [TouchGrass](https://pranayy1.github.io/touchgrass-site/) |
+For most users, the easiest way to install TouchGrass is through the official website:
 
-Download the latest `.msi` installer from the Releases page. Run it like any other Windows application.
+👉 **[Official Website](https://pranayy1.github.io/touchgrass-site/)**
+
+Developers and contributors can also download the latest `.msi` installer directly from GitHub:
+
+- [GitHub Releases](https://github.com/Pranayy1/TouchGrass/releases) — changelog and release notes
+- [Marketing Repository](https://github.com/Pranayy1/touchgrass-site) — website source code
 
 ---
 
@@ -96,7 +105,7 @@ Download the latest `.msi` installer from the Releases page. Run it like any oth
 
 ### For Users
 - Windows 10 (1903+) or Windows 11
-- No additional dependencies
+- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Windows 11 and most modern Windows 10 installations)
 
 ### For Development
 - [Node.js](https://nodejs.org/) 18+
@@ -123,7 +132,7 @@ npm run tauri dev
 npm run tauri build
 ```
 
-The compiled installer will be located in `src-tauri/target/release/bundle/nsis/`.
+The compiled installers will be located in `src-tauri/target/release/bundle/`. Both EXE and MSI installers are generated.
 
 ---
 
@@ -201,31 +210,39 @@ TouchGrass is built privacy-first:
 
 ---
 
+## 🚧 Project Status
+
+TouchGrass is actively maintained. New features and improvements are added regularly, and community contributions are welcome. If you encounter a bug or have a suggestion, please open an issue on GitHub.
+
+---
+
 ## 🛣 Roadmap
 
 ### Completed
-- Screen time tracking
-- Per-application usage tracking
-- Daily dashboard
-- 7-day analytics
-- Focus timer with floating popup
-- Timer completion notifications
-- Persistent notification center
-- Unread/read tracking
-- Breathing exercise
-- Calm music
-- System tray support
-- Launch on startup
-- Automatic update checker
-- Settings page
-- Local JSON storage
+- [x] Screen time tracking
+- [x] Per-application usage tracking
+- [x] Daily dashboard
+- [x] 7-day analytics
+- [x] Focus timer with floating popup
+- [x] Timer completion notifications
+- [x] Persistent notification center with live sync
+- [x] Unread/read tracking
+- [x] Breathing exercise
+- [x] Calm music
+- [x] System tray support
+- [x] Launch on startup
+- [x] Automatic update checker
+- [x] Settings page
+- [x] Local JSON storage
+
+### In Progress
+- [ ] Screenshots and demo media in README
 
 ### Planned
-- Screenshots and demo media in README
-- Linux support
-- macOS support
-- Notification history search
-- Export usage data to CSV
+- [ ] Linux support
+- [ ] macOS support
+- [ ] Notification history search
+- [ ] Export usage data to CSV
 
 ---
 
@@ -274,7 +291,17 @@ Delete `touchgrass_state.json` from the app data directory. The app will start f
 
 ## 📄 License
 
-This project is licensed under the MIT License. A `LICENSE` file will be added to the repository.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🔗 Links
+
+| Resource | URL |
+|----------|-----|
+| Official Website | [TouchGrass](https://pranayy1.github.io/touchgrass-site/) |
+| GitHub Releases | [github.com/Pranayy1/TouchGrass/releases](https://github.com/Pranayy1/TouchGrass/releases) |
+| Marketing Website Repository | [github.com/Pranayy1/touchgrass-site](https://github.com/Pranayy1/touchgrass-site) |
 
 ---
 
@@ -284,3 +311,13 @@ This project is licensed under the MIT License. A `LICENSE` file will be added t
 
 - GitHub: [@Pranayy1](https://github.com/Pranayy1)
 - Email: pranaypandey.dev@gmail.com
+
+---
+
+<div align="center">
+
+Made with 💚 using Rust, Tauri, HTML, CSS & JavaScript
+
+⭐ If you find TouchGrass useful, consider giving the repository a star!
+
+</div>
