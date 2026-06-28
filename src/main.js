@@ -74,6 +74,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 		focusResetBtn: document.getElementById("focus-reset-btn"),
 		notificationBtn: document.getElementById("notification-btn"),
 		notificationPanel: document.getElementById("notification-panel"),
+		notificationList: document.getElementById("notification-list"),
+		clearAllNotifications: document.getElementById("clear-all-notifications"),
 		updateCheckBtn: document.getElementById("update-check-btn"),
 		notificationBadge: document.getElementById("notification-badge"),
 		modal: document.getElementById("breathe-modal"),
@@ -373,7 +375,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 		}
 		state.forceFocusRender = true;
 		renderFocus(state, dom);
-		await openFocusPopup(remaining);
+		await openFocusPopup(remaining, state.focusDurationMinutes);
 	});
 
 	dom.focusMinuteSelect?.addEventListener("change", () => {
@@ -1615,13 +1617,14 @@ function renderFocus(state, dom) {
 	}
 }
 
-async function openFocusPopup(remainingSeconds) {
+async function openFocusPopup(remainingSeconds, minutes) {
 	const safeRemaining = Math.max(1, Math.round(remainingSeconds));
+	const safeMinutes = Math.max(1, Math.round(minutes));
 	const tauriInvoke = window.__TAURI__?.core?.invoke;
 
 	if (tauriInvoke) {
 		try {
-			await tauriInvoke("show_focus_popup", { remainingSeconds: safeRemaining });
+			await tauriInvoke("show_focus_popup", { remainingSeconds: safeRemaining, minutes: safeMinutes });
 			return true;
 		} catch (error) {
 			console.warn("Could not open native focus popup:", error);

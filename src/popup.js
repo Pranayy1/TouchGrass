@@ -11,11 +11,14 @@ let lastKnownRemaining = Number.isFinite(injectedRemaining) && injectedRemaining
     ? Math.floor(hashRemaining)
     : 0;
 let isRunning = lastKnownRemaining > 0;
-const injectedMinutes = Number(window.__FOCUS_POPUP_MINUTES__);
-const originalMinutes = Number.isFinite(injectedMinutes) && injectedMinutes > 0
-  ? Math.round(injectedMinutes)
-  : 0;
 let completionNotified = false;
+
+function getOriginalMinutes() {
+  const value = Number(window.__FOCUS_POPUP_MINUTES__);
+  return Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : 0;
+}
 
 function formatTime(totalSeconds) {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
@@ -58,6 +61,7 @@ function tick() {
   lastKnownRemaining = Math.max(0, lastKnownRemaining - 1);
   if (lastKnownRemaining <= 0) {
     isRunning = false;
+    const originalMinutes = getOriginalMinutes();
     if (!completionNotified && originalMinutes > 0) {
       completionNotified = true;
       invokeTauri("timer_completed", { minutes: originalMinutes }).catch((error) => {

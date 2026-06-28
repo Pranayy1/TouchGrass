@@ -190,10 +190,16 @@ fn show_main_window(app: AppHandle) {
 }
 
 #[tauri::command]
-async fn show_focus_popup(app: AppHandle, remaining_seconds: u32) -> tauri::Result<()> {
+async fn show_focus_popup(app: AppHandle, remaining_seconds: u32, minutes: u32) -> tauri::Result<()> {
     let remaining = remaining_seconds.max(1);
+    let minutes = minutes.max(1);
+    let initialization_script = format!(
+        "window.__FOCUS_POPUP_REMAINING__ = {}; window.__FOCUS_POPUP_MINUTES__ = {};",
+        remaining, minutes
+    );
 
     if let Some(window) = app.get_webview_window("focus-popup") {
+        window.eval(&initialization_script)?;
         window.set_always_on_top(true)?;
         window.set_maximizable(false)?;
         window.set_shadow(false)?;
@@ -203,8 +209,6 @@ async fn show_focus_popup(app: AppHandle, remaining_seconds: u32) -> tauri::Resu
         window.set_focus()?;
         return Ok(());
     }
-
-    let initialization_script = format!("window.__FOCUS_POPUP_REMAINING__ = {};", remaining);
 
     let popup =
         WebviewWindowBuilder::new(&app, "focus-popup", WebviewUrl::App("popup.html".into()))
@@ -218,7 +222,7 @@ async fn show_focus_popup(app: AppHandle, remaining_seconds: u32) -> tauri::Resu
             .skip_taskbar(true)
             .focused(true)
             .inner_size(172.0, 44.0)
-            .initialization_script(initialization_script)
+            .initialization_script(&initialization_script)
             .build()?;
 
     popup.set_focus()?;
