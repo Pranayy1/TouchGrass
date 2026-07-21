@@ -1,0 +1,47 @@
+// TouchGrass Design System – Typography Tokens
+// Uses system fonts (Segoe UI Variable) with fallbacks.
+// Sizes are logical pixels; they scale with Windows DPI settings.
+
+export struct TextStyle {
+	font-family: string,
+	font-size: length,
+	font-weight: int,
+	line-height: length,
+}
+
+export global Typography {
+	out property <string> font-family: "Segoe UI Variable, Segoe UI, sans-serif";
+
+	// Text scales
+	out property <length> text-size-display-xl: 32px;
+	out property <length> text-size-display-l: 24px;
+	out property <length> text-size-display-m: 20px;
+	out property <length> text-size-body-l: 16px;
+	out property <length> text-size-body-m: 14px;
+	out property <length> text-size-body-s: 12px;
+	out property <length> text-size-label-xs: 12px;
+
+	// Line heights (approximate, based on typical 1.2–1.5 factor)
+	out property <length> line-height-display-xl: 38px;
+	out property <length> line-height-display-l: 30px;
+	out property <length> line-height-display-m: 26px;
+	out property <length> line-height-body-l: 22px;
+	out property <length> line-height-body-m: 20px;
+	out property <length> line-height-body-s: 16px;
+	out property <length> line-height-label-xs: 16px;
+
+	// Font weights
+	out property <int> weight-regular: 400;
+	out property <int> weight-medium: 500;
+	out property <int> weight-semibold: 600;
+	out property <int> weight-bold: 700;
+
+	// Convenience aliases for common usage
+	out property <TextStyle> title-xl: { font-family: font-family, font-size: text-size-display-xl, font-weight: weight-semibold, line-height: line-height-display-xl };
+	out property <TextStyle> title-l: { font-family: font-family, font-size: text-size-display-l, font-weight: weight-semibold, line-height: line-height-display-l };
+	out property <TextStyle> title-m: { font-family: font-family, font-size: text-size-display-m, font-weight: weight-semibold, line-height: line-height-display-m };
+	out property <TextStyle> body-l: { font-family: font-family, font-size: text-size-body-l, font-weight: weight-regular, line-height: line-height-body-l };
+	out property <TextStyle> body-m: { font-family: font-family, font-size: text-size-body-m, font-weight: weight-regular, line-height: line-height-body-m };
+	out property <TextStyle> body-s: { font-family: font-family, font-size: text-size-body-s, font-weight: weight-regular, line-height: line-height-body-s };
+	out property <TextStyle> label-xs: { font-family: font-family, font-size: text-size-label-xs, font-weight: weight-medium, line-height: line-height-label-xs };
+}

@@ -1,0 +1,18 @@
+// Placeholder Slint window.
+// Implemented only as a compile-time stub for the new layered
+// structure — no real UI controls are rendered here on purpose.
+// A structural placeholder keeps the build green while the
+// architecture skeleton is being designed.
+
+export component PlaceholderWindow inherits Window {
+    title: "TouchGrass Slint Prototype";
+    min-width: 200px;
+    min-height: 100px;
+
+    // Placeholder content: a centered text.
+    Text {
+        text: "Placeholder UI";
+        x: parent.width / 2 - self.width / 2;
+        y: parent.height / 2 - self.height / 2;
+    }
+}

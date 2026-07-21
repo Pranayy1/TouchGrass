@@ -1,0 +1,25 @@
+// TouchGrass Design System – Spacing Tokens
+// All dimensions are expressed in logical pixels and follow an 8‑px grid.
+// The base unit is 4 px for fine adjustments.
+
+export global Spacing {
+	out property <length> space-base: 4px;        // smallest nudge
+	out property <length> space-unit: 8px;        // core grid step
+	out property <length> space-double: 16px;     // 2 * unit
+	out property <length> space-triple: 24px;     // 3 * unit
+	out property <length> space-quad: 32px;       // 4 * unit
+
+	// Gap shortcuts (useful for layout spacing)
+	out property <length> gap-xs: 4px;
+	out property <length> gap-s: 8px;
+	out property <length> gap-m: 16px;
+	out property <length> gap-l: 24px;
+	out property <length> gap-xl: 32px;
+
+	// Padding helpers (can be used directly in elements)
+	out property <length> padding-xs: 4px;
+	out property <length> padding-s: 8px;
+	out property <length> padding-m: 16px;
+	out property <length> padding-l: 24px;
+	out property <length> padding-xl: 32px;
+}

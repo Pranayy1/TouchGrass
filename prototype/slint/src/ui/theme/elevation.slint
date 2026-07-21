@@ -1,0 +1,11 @@
+// TouchGrass Design System – Elevation Tokens
+// These values represent a box-shadow that can be applied to elements.
+// If the Slint backend does not yet support box‑shadow, they serve as design
+// tokens for future implementation or later (via custom shader or overlay).
+export global Elevation {
+	out property <string> shadow-none: "0px 0px 0px 0px rgba(0,0,0,0)";
+	out property <string> shadow-low: "0px 1px 2px 0px rgba(0,0,0,0.08)";
+	out property <string> shadow-medium: "0px 2px 4px 0px rgba(0,0,0,0.12)";
+	out property <string> shadow-high: "0px 4px 8px 0px rgba(0,0,0,0.16)";
+	out property <string> shadow-overlay: "0px 0px 0px 1px rgba(0,0,0,0.2)"; // focus ring outline
+}
