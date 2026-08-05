@@ -51,7 +51,7 @@ use slint::ComponentHandle;
 // Bring in the Slint component defined in `src/ui/main.slint`.
 slint::include_modules!();
 
-pub use preview::PreviewWindow;
+pub use self::preview::PreviewWindow;
 
 // A simple handle that the application can use to update UI text.
 // In a real implementation this would hold weak handles to the Slint

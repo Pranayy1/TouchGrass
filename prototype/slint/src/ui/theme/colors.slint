@@ -1,38 +1,6 @@
-// TouchGrass Design System – Color Tokens
-// Defines the semantic color palette for Light and Dark themes.
-// The active theme is controlled by the `current_theme` variable.
-// To switch themes at runtime, update `current_theme` (not implemented yet).
-
-export enum Theme { Light, Dark }
-
-export global ThemeState {
-	in-out property <Theme> current_theme: Theme.Light;
-}
-
 export global Colors {
-	// Backgrounds
-	out property <color> color-background: ThemeState.current_theme == Theme.Light ? #FFFFFF : #202020;
-	out property <color> color-surface: ThemeState.current_theme == Theme.Light ? #FAFAFA : #2A2A2A;
-
-	// Primary accent (follows Windows accent by default)
-	out property <color> color-primary: ThemeState.current_theme == Theme.Light ? #0078D7 : #33B1FF;
-	out property <color> color-primary-hover: ThemeState.current_theme == Theme.Light ? #2B8ADB : #66C9FF;
-	out property <color> color-primary-pressed: ThemeState.current_theme == Theme.Light ? #005A9E : #0099DB;
-
-	// Semantic colors
-	out property <color> color-success: ThemeState.current_theme == Theme.Light ? #107C10 : #33D16A;
-	out property <color> color-warning: ThemeState.current_theme == Theme.Light ? #FF8C00 : #FFB400;
-	out property <color> color-error: ThemeState.current_theme == Theme.Light ? #D13434 : #FF6B6B;
-
-	// Text
-	out property <color> color-text-primary: ThemeState.current_theme == Theme.Light ? #202020 : #FFFFFF;
-	out property <color> color-text-secondary: ThemeState.current_theme == Theme.Light ? #606060 : #C0C0C0;
-	out property <color> color-text-disabled: ThemeState.current_theme == Theme.Light ? #B0B0B0 : #606060;
-
-	// Borders
-	out property <color> color-border: ThemeState.current_theme == Theme.Light ? #D0D0D0 : #404040;
-	out property <color> color-border-focus: color-primary;
-
-	// Overlay (for modals, etc.)
-	out property <color> color-overlay: ThemeState.current_theme == Theme.Light ? #00000033 : #FFFFFF33;
+    out property <color> background: #FFFFFF;
+    out property <color> surface: #F5F5F5;
+    out property <color> primary: #0078D7;
+    out property <color> text: #202020;
 }
