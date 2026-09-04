@@ -1,0 +1,197 @@
+import { Colors } from "../ui/theme/colors.slint"
+import { Radius } from "../ui/theme/theme.slint"
+import { Spacing } from "../ui/theme/theme.slint"
+import { Typography } from "../ui/theme/theme.slint"
+import { Sizes } from "../ui/theme/tokens.slint"
+import { StatTile } from "../ui/components/StatTile.slint"
+import { ProgressBar } from "../ui/components/ProgressBar.slint"
+import { Button } from "../ui/components/Button.slint"
+
+export component Dashboard inherits Rectangle {
+    // We will let the parent set the width and height.
+    // We'll layout our content vertically.
+
+    background: Colors.surface
+
+    // Callback to get data from Rust backend
+    callback get_data
+
+    // Internal properties to store the data
+    in property <string> today_usage: "0h 0m"
+    in property <string> focus_time: "0h 0m"
+    in property <string> sessions: "0"
+    in property <string> app1_name: "Loading..."
+    in property <string> app1_usage: "0m"
+    in property <float> app1_progress: 0.0
+    in property <string> app2_name: "Loading..."
+    in property <string> app2_usage: "0m"
+    in property <float> app2_progress: 0.0
+    in property <string> app3_name: "Loading..."
+    in property <string> app3_usage: "0m"
+    in property <float> app3_progress: 0.0
+    in property <string> app4_name: "Loading..."
+    in property <string> app4_usage: "0m"
+    in property <float> app4_progress: 0.0
+    in property <float> max_progress: 180.0
+
+    // Timer to periodically update data
+    Timer {
+        interval: 2000
+        repeating: true
+        started: true
+        => {
+            root.get_data();
+        }
+    }
+
+    VerticalLayout {
+        spacing: Spacing.padding-l
+        padding: Spacing.padding-xl
+
+        Text {
+            text: "Dashboard"
+            color: Colors.text
+            font-family: Typography.font-family
+            font-size: Typography.text-size-display-l
+            font-weight: Typography.weight-semibold
+        }
+
+        Text {
+            text: "Your computer activity today"
+            color: Colors.text
+            opacity: 0.7
+            font-family: Typography.font-family
+            font-size: Typography.text-size-body-m
+        }
+
+        HorizontalLayout {
+            spacing: Spacing.padding-l
+
+            StatTile {
+                title: "Today's Usage"
+                value: root.today_usage
+                subtitle: "Total computer usage"
+                width: ((parent.width - 2 * Spacing.padding-xl) - 2 * Spacing.padding-l) / 3
+                height: Sizes.stat-tile-height
+            }
+
+            StatTile {
+                title: "Focus Time"
+                value: root.focus_time
+                subtitle: "Focused work today"
+                width: ((parent.width - 2 * Spacing.padding-xl) - 2 * Spacing.padding-l) / 3
+                height: Sizes.stat-tile-height
+            }
+
+            StatTile {
+                title: "Sessions"
+                value: root.sessions
+                subtitle: "Completed sessions"
+                width: ((parent.width - 2 * Spacing.padding-xl) - 2 * Spacing.padding-l) / 3
+                height: Sizes.stat-tile-height
+            }
+        }
+
+        Text {
+            text: "Top Applications"
+            color: Colors.text
+            font-family: Typography.font-family
+            font-size: Typography.text-size-body-l
+            font-weight: Typography.weight-semibold
+        }
+
+        VerticalLayout {
+            spacing: Spacing.padding-m
+
+            HorizontalLayout {
+                Text {
+                    text: root.app1_name
+                    color: Colors.text
+                    font-family: Typography.font-family
+                    font-size: Typography.text-size-body-m
+                    width: Sizes.dashboard-app-name-width
+                }
+                Text {
+                    text: root.app1_usage
+                    color: Colors.text
+                    font-family: Typography.font-family
+                    font-size: Typography.text-size-body-m
+                    width: Sizes.dashboard-duration-width
+                    horizontal-alignment: right
+                }
+                ProgressBar {
+                    value: root.app1_progress
+                    maximum: 180.0
+                    height: Spacing.padding-s
+                }
+            }
+
+            HorizontalLayout {
+                Text {
+                    text: root.app2_name
+                    color: Colors.text
+                    font-family: Typography.font-body
+                    font-size: Typography.text-size-body-m
+                    width: Sizes.dashboard-duration-width
+                    horizontal-alignment: right
+                }
+                ProgressBar {
+                    value: root.app2_progress
+                    maximum: 180.0
+                    height: Spacing.padding-s
+                }
+            }
+
+            HorizontalLayout {
+                Text {
+                    text: root.app3_name
+                    color: Colors.text
+                    font-family: Typography.font-family
+                    font-size: Typography.text-size-body-m
+                    width: Sizes.dashboard-app-name-width
+                }
+                Text {
+                    text: root.app3_usage
+                    color: Colors.text
+                    font-family: Typography.font-family
+                    font-size: Typography.text-size-body-m
+                    width: Sizes.dashboard-duration-width
+                    horizontal-alignment: right
+                }
+                ProgressBar {
+                    value: root.app3_progress
+                    maximum: 180.0
+                    height: Spacing.padding-s
+                }
+            }
+
+            HorizontalLayout {
+                Text {
+                    text: root.app4_name
+                    color: Colors.text
+                    font-family: Typography.font-family
+                    font-size: Typography.text-size-body-m
+                    width: Sizes.dashboard-app-name-width
+                }
+                Text {
+                    text: root.app4_usage
+                    color: Colors.text
+                    font-family: Typography.font-family
+                    font-size: Typography.text-size-body-m
+                    width: Sizes.dashboard-duration-width
+                    horizontal-alignment: right
+                }
+                ProgressBar {
+                    value: root.app4_progress
+                    maximum: 180.0
+                    height: Spacing.padding-s
+                }
+            }
+        }
+
+        Button {
+            label: "Start Focus"
+            clicked => { debug("Start Focus button clicked") }
+        }
+    }
+}

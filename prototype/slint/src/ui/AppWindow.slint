@@ -1,0 +1,106 @@
+import { Colors } from "./theme/colors.slint";
+import { Radius } from "./theme/theme.slint";
+import { Spacing } from "./theme/theme.slint";
+import { Typography } from "./theme/theme.slint";
+import { Sizes } from "./theme/tokens.slint";
+import { Button } from "./components/Button.slint";
+import { Dashboard } from "../screens/Dashboard.slint";
+import { Settings } from "../screens/Settings.slint";
+
+export enum NavItem {
+    Dashboard,
+    Analytics,
+    Settings,
+}
+
+export component AppWindow inherits Window {
+    title: "TouchGrass";
+    width: 1024px;
+    height: 768px;
+
+    // State for selected navigation item
+    property <NavItem> selected-nav: NavItem.Dashboard;
+
+    // Header
+    Rectangle {
+        background: Colors.primary;
+        height: Spacing.padding-l;
+        Text {
+            text: "TouchGrass";
+            color: Colors.background;
+            font-family: Typography.font-family;
+            font-size: Typography.text-size-body-l;
+            font-weight: Typography.weight-semibold;
+        }
+    }
+
+    // Main area
+    Rectangle {
+        y: Spacing.padding-l;
+        height: parent.height - Spacing.padding-l;
+
+        // Navigation area
+        Rectangle {
+            x: 0;
+            width: Sizes.nav-bar-width;
+            height: parent.height;
+            background: Colors.surface;
+
+            // Navigation buttons
+            Button {
+                label: "Dashboard";
+                y: Spacing.padding-m;
+                height: Sizes.button-height;
+                primary: root.selected-nav == NavItem.Dashboard;
+                clicked => { root.selected-nav = NavItem.Dashboard; }
+            }
+            Button {
+                label: "Analytics";
+                y: Spacing.padding-m + Sizes.button-height + Spacing.padding-s;
+                height: Sizes.button-height;
+                primary: root.selected-nav == NavItem.Analytics;
+                clicked => { root.selected-nav = NavItem.Analytics; }
+            }
+            Button {
+                label: "Settings";
+                y: Spacing.padding-m + 2 * (Sizes.button-height + Spacing.padding-s);
+                height: Sizes.button-height;
+                primary: root.selected-nav == NavItem.Settings;
+                clicked => { root.selected-nav = NavItem.Settings; }
+            }
+        }
+
+        // Content area
+        Rectangle {
+            x: Sizes.nav-bar-width;
+            width: parent.width - Sizes.nav-bar-width;
+            height: parent.height;
+            background: Colors.surface;
+
+            Dashboard {
+                visible: root.selected-nav == NavItem.Dashboard;
+                width: parent.width;
+                height: parent.height;
+            }
+
+            Settings {
+                visible: root.selected-nav == NavItem.Settings;
+                width: parent.width;
+                height: parent.height;
+            }
+
+            Text {
+                visible: root.selected-nav != NavItem.Dashboard && root.selected-nav != NavItem.Settings;
+                text: "Content Area";
+                color: Colors.text;
+                font-family: Typography.font-family;
+                font-size: Typography.text-size-body-m;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    // Close request callback
+    callback close-requested();
+}

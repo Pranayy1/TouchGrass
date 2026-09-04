@@ -1,0 +1,38 @@
+import { Colors } from "../theme/colors.slint";
+import { Radius } from "../theme/theme.slint";
+import { Spacing } from "../theme/theme.slint";
+import { Typography } from "../theme/theme.slint";
+
+export component Card inherits Rectangle {
+    in property <string> content: "";
+    in property <bool> clickable: false;
+    callback clicked;
+
+    background: Colors.surface;
+    border-radius: Radius.radius-card;
+
+    // Inner area for content with padding
+    Rectangle {
+        x: Spacing.padding-m;
+        y: Spacing.padding-m;
+        width: parent.width - 2 * Spacing.padding-m;
+        height: parent.height - 2 * Spacing.padding-m;
+
+        Text {
+            text: content;
+            color: Colors.text;
+            font-family: Typography.font-family;
+            font-size: Typography.text-size-body-m;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        // TouchArea for clickable cards, covers the inner padded area
+        TouchArea {
+            visible: clickable;
+            width: parent.width;
+            height: parent.height;
+            clicked => { root.clicked() };
+        }
+    }
+}

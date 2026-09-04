@@ -1,0 +1,46 @@
+import { Colors } from "../theme/colors.slint";
+import { Radius } from "../theme/theme.slint";
+import { Spacing } from "../theme/theme.slint";
+import { Typography } from "../theme/theme.slint";
+
+export component StatTile inherits Rectangle {
+    in property <string> title;
+    in property <string> value;
+    in property <string> subtitle;
+
+    background: Colors.surface;
+    border-radius: Radius.radius-card;
+
+    // Title Text
+    Text {
+        text: title;
+        color: Colors.text;
+        font-family: Typography.font-family;
+        font-size: Typography.text-size-body-s;
+        font-weight: Typography.weight-regular;
+        x: Spacing.padding-s;
+        y: Spacing.padding-s;
+    }
+
+    // Value Text (more prominent)
+    Text {
+        text: value;
+        color: Colors.text;
+        font-family: Typography.font-family;
+        font-size: Typography.text-size-display-l;
+        font-weight: Typography.weight-semibold;
+        x: Spacing.padding-s;
+        y: parent.height / 2 - self.height / 2;
+    }
+
+    // Subtitle Text
+    Text {
+        text: subtitle;
+        color: Colors.text;
+        font-family: Typography.font-family;
+        font-size: Typography.text-size-body-s;
+        font-weight: Typography.weight-regular;
+        x: Spacing.padding-s;
+        y: parent.height - Spacing.padding-s - self.height;
+    }
+}

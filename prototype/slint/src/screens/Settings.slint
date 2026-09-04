@@ -1,0 +1,90 @@
+import { Colors } from "../ui/theme/colors.slint";
+import { Radius } from "../ui/theme/theme.slint";
+import { Spacing } from "../ui/theme/theme.slint";
+import { Typography } from "../ui/theme/theme.slint";
+import { Sizes } from "../ui/theme/tokens.slint";
+import { StatTile } from "../ui/components/StatTile.slint";
+
+export component Settings inherits Rectangle {
+    // We will let the parent set the width and height.
+    // We'll layout our content vertically.
+
+    background: Colors.surface
+
+    // Callback to get settings data from Rust backend
+    callback get_settings_data;
+
+    // Internal properties to store the settings data
+    in property <bool> tracking_enabled: false
+    in property <bool> hide_on_close: false
+    in property <bool> hourly_notifications_enabled: true
+
+    // Timer to periodically update data
+    Timer {
+        interval: 2000
+        repeating: true
+        started: true
+        => {
+            root.get_settings_data();
+        }
+    }
+
+    VerticalLayout {
+        spacing: Spacing.padding-l
+        padding: Spacing.padding-xl
+
+        Text {
+            text: "Settings"
+            color: Colors.text
+            font-family: Typography.font-family
+            font-size: Typography.text-size-display-l
+            font-weight: Typography.weight-semibold
+        }
+
+        Text {
+            text: "Configure TouchGrass behavior"
+            color: Colors.text
+            opacity: 0.7
+            font-family: Typography.font-family
+            font-size: Typography.text-size-body-m
+        }
+
+        // Settings Card
+        Rectangle {
+            background: Colors.surface;
+            border-radius: Radius.radius-card;
+
+            VerticalLayout {
+                spacing: Spacing.padding-m
+                padding: Spacing.padding-l
+
+                // Tracking Setting
+                StatTile {
+                    title: "Tracking"
+                    value: root.tracking_enabled ? "Enabled" : "Disabled"
+                    subtitle: "Track computer activity in the background"
+                    width: parent.width
+                    height: Sizes.stat-tile-height
+                }
+
+                // Hide on Close Setting
+                StatTile {
+                    title: "Hide on Close"
+                    value: root.hide_on_close ? "Enabled" : "Disabled"
+                    subtitle: "Hide the window instead of exiting"
+                    width: parent.width
+                    height: Sizes.stat-tile-height
+                }
+
+                // Hourly Notifications Setting
+                StatTile {
+                    title: "Hourly Notifications"
+                    value: root.hourly_notifications_enabled ? "Enabled" : "Disabled"
+                    subtitle: "Receive hourly usage notifications"
+                    width: parent.width
+                    height: Sizes.stat-tile-height
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,29 @@
+import { Colors } from "../theme/colors.slint";
+import { Radius } from "../theme/theme.slint";
+import { Spacing } from "../theme/theme.slint";
+
+export component ProgressBar inherits Rectangle {
+    in property <float> value: 0.0;
+    in property <float> maximum: 100.0;
+    in property <bool> enabled: true;
+
+    // Background track
+    Rectangle {
+        background: Colors.surface;
+        border-radius: Radius.radius-sm;
+        y: (parent.height - self.height) / 2;
+        height: Spacing.padding-s; // 8px thickness
+        width: parent.width;
+        opacity: enabled ? 1.0 : 0.5;
+    }
+
+    // Filled progress
+    Rectangle {
+        background: Colors.primary;
+        border-radius: Radius.radius-sm;
+        y: (parent.height - self.height) / 2;
+        height: Spacing.padding-s;
+        width: max(0.0, min(value, maximum)) / max(maximum, 0.0001) * parent.width;
+        opacity: enabled ? 1.0 : 0.5;
+    }
+}

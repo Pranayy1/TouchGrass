@@ -1,0 +1,40 @@
+import { Colors } from "../theme/colors.slint";
+import { Radius, Typography } from "../theme/theme.slint";
+import { Sizes } from "../theme/tokens.slint";
+
+export component Button inherits Rectangle {
+    in property <string> label: "Button";
+    in property <bool> primary: true;
+    in property <bool> enabled: true;
+    callback clicked;
+
+    width: Sizes.button-width;
+    height: Sizes.button-height;
+    border-radius: Radius.radius-button;
+    background: primary ? Colors.primary : Colors.surface;
+    opacity: enabled ? 1.0 : 0.6;
+
+    Text {
+        text: label;
+        color: enabled ? (primary ? Colors.background : Colors.text) : Colors.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+        font-family: Typography.font-family;
+        font-size: Typography.text-size-body-m;
+        font-weight: Typography.weight-medium;
+    }
+
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        clicked => {
+            if (enabled) {
+                root.clicked();
+            }
+        }
+    }
+}

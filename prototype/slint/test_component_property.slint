@@ -1,0 +1,17 @@
+import { Colors } from "../theme/colors.slint";
+
+export component TestWindow inherits Window {
+    width: 200px;
+    height: 200px;
+
+    export component BoxWithContent inherits Rectangle {
+        in property <component> content;
+    }
+
+    BoxWithContent {
+        width: 100px;
+        height: 100px;
+        background: Colors.primary;
+        content: Text { text: "Hello"; color: Colors.text; };
+    }
+}

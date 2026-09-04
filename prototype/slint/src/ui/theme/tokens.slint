@@ -1,113 +1,17 @@
-// TouchGrass Design System – Tokens
-// Contains all non-color design tokens: spacing, radius, typography, elevation, etc.
+// TouchGrass Design System – Tokens Module
+// Exported globals containing constant design tokens.
+// No bindings, no conditionals, only literal values.
 
-export global Spacing {
-    // 8px grid with 4px base
-    out property <length> space-base: 4px;
-    out property <length> space-unit: 8px;
-    out property <length> space-double: 16px;
-    out property <length> space-triple: 24px;
-    out property <length> space-quad: 32px;
-
-    // Gap shortcuts
-    out property <length> gap-xs: 4px;
-    out property <length> gap-s: 8px;
-    out property <length> gap-m: 16px;
-    out property <length> gap-l: 24px;
-    out property <length> gap-xl: 32px;
-
-    // Padding helpers
-    out property <length> padding-xs: 4px;
-    out property <length> padding-s: 8px;
-    out property <length> padding-m: 16px;
-    out property <length> padding-l: 24px;
-    out property <length> padding-xl: 32px;
-}
-
-export global Radius {
-    out property <length> radius-none: 0px;
-    out property <length> radius-sm: 4px;
-    out property <length> radius-md: 8px;
-    out property <length> radius-lg: 12px;
-    out property <length> radius-pill: 9999px; // effectively a capsule
-}
-
-export global Typography {
-    // Font family
-    out property <string> font-family: "Segoe UI Variable, Segoe UI, sans-serif";
-
-    // Text sizes
-    out property <length> text-size-display-xl: 32px;
-    out property <length> text-size-display-l: 24px;
-    out property <length> text-size-display-m: 20px;
-    out property <length> text-size-body-l: 16px;
-    out property <length> text-size-body-m: 14px;
-    out property <length> text-size-body-s: 12px;
-    out property <length> text-size-label-xs: 12px;
-
-    // Line heights
-    out property <length> line-height-display-xl: 38px;
-    out property <length> line-height-display-l: 30px;
-    out property <length> line-height-display-m: 26px;
-    out property <length> line-height-body-l: 22px;
-    out property <length> line-height-body-m: 20px;
-    out property <length> line-height-body-s: 16px;
-    out property <length> line-height-label-xs: 16px;
-
-    // Font weights
-    out property <int> weight-regular: 400;
-    out property <int> weight-medium: 500;
-    out property <int> weight-semibold: 600;
-    out property <int> weight-bold: 700;
-
-    // Convenience aliases (as structs)
-    // Note: We cannot export structs directly from a global? We can export them as properties of a struct?
-    // But the requirement is to have reusable values. We can export the struct as a property of the global?
-    // However, the user's note shows they want to export Typography and TextStyle from typography.slint.
-    // We'll instead export the structs as properties of the Typography global? Or we can have a separate global for text styles?
-    // Let's follow the user's note: they had typography.slint exporting Typography and TextStyle.
-    // We'll change: we'll have two globals: Typography (for the base values) and TextStyle (for the struct aliases).
-    // But to keep it simple, we'll put the struct aliases in the Typography global as well.
-    // However, note that the user's note for theme.slint shows they want to export { Typography, TextStyle } from "./typography.slint".
-    // We'll create two separate globals in tokens.slint: Typography and TextStyle.
-    // But the user's note for tokens.slint says it contains exported globals for Spacing, Radius, Typography, Animation, Common Sizes.
-    // We'll interpret Typography as a global that contains the font family, sizes, etc., and TextStyle as a global that contains the struct aliases.
-    // However, we can also put the struct aliases inside the Typography global as properties.
-    // Let's do that: we'll put the struct aliases as properties of the Typography global.
-    // But note: the user's note for theme.slint shows they want to export Typography and TextStyle as separate.
-    // We'll compromise: we'll create two globals: Typography (for the base values) and TextStyle (for the struct aliases).
-    // We'll do that later.
-
-    // For now, we'll put the struct aliases as properties of the Typography global and then in theme.slint we can re-export the structs by name?
-    // Actually, we can't export a property of a global as a standalone symbol without re-exporting the global and then using dot notation.
-    // The user's note shows they want to export { Typography, TextStyle } from "./typography.slint", meaning they want two separate globals.
-    // Let's create two globals: Typography and TextStyle.
-    // We'll move the struct aliases to TextStyle.
-}
-
-// We'll create a separate global for text style aliases.
-export struct TextStyleValue {
-    font-family: string,
-    font-size: length,
-    font-weight: int,
-    line-height: length,
-}
-
-export global TextStyle {
-    out property <TextStyleValue> title-xl: { font-family: Typography.font-family, font-size: Typography.text-size-display-xl, font-weight: Typography.weight-semibold, line-height: Typography.line-height-display-xl };
-    out property <TextStyleValue> title-l:  { font-family: Typography.font-family, font-size: Typography.text-size-display-l,  font-weight: Typography.weight-semibold, line-height: Typography.line-height-display-l };
-    out property <TextStyleValue> title-m:  { font-family: Typography.font-family, font-size: Typography.text-size-display-m,  font-weight: Typography.weight-semibold, line-height: Typography.line-height-display-m };
-    out property <TextStyleValue> body-l:   { font-family: Typography.font-family, font-size: Typography.text-size-body-l,   font-weight: Typography.weight-regular, line-height: Typography.line-height-body-l };
-    out property <TextStyleValue> body-m:   { font-family: Typography.font-family, font-size: Typography.text-size-body-m,   font-weight: Typography.weight-regular, line-height: Typography.line-height-body-m };
-    out property <TextStyleValue> body-s:   { font-family: Typography.font-family, font-size: Typography.text-size-body-s,   font-weight: Typography.weight-regular, line-height: Typography.line-height-body-s };
-    out property <TextStyleValue> label-xs: { font-family: Typography.font-family, font-size: Typography.text-size-label-xs, font-weight: Typography.weight-medium, line-height: Typography.line-height-label-xs };
-}
-
-// Elevation tokens (box-shadow strings)
-export global Elevation {
-    out property <string> shadow-none: "0px 0px 0px 0px rgba(0,0,0,0)";
-    out property <string> shadow-low:  "0px 1px 2px 0px rgba(0,0,0,0.08)";
-    out property <string> shadow-medium: "0px 2px 4px 0px rgba(0,0,0,0.12)";
-    out property <string> shadow-high: "0px 4px 8px 0px rgba(0,0,0,0.16)";
-    out property <string> shadow-overlay: "0px 0px 0px 1px rgba(0,0,0,0.2)"; // focus ring outline
+export global Sizes {
+    out property <length> icon-small: 16px;
+    out property <length> icon-medium: 24px;
+    out property <length> icon-large: 32px;
+    out property <length> window-min-width: 200px;
+    out property <length> window-min-height: 100px;
+    out property <length> button-width: 100px;
+    out property <length> button-height: 36px;
+    out property <length> dashboard-app-name-width: 100px;
+    out property <length> dashboard-duration-width: 80px;
+    out property <length> stat-tile-height: 60px;
+    out property <length> nav-bar-width: 200px;
 }

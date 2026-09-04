@@ -1,14 +1,21 @@
 // TouchGrass Design System – Theme Module
-// This module re-exports the Theme enum and ThemeState from colors.slint,
-// and also re-exports all the design tokens (colors, spacing, typography, radius, elevation)
-// for convenience. The color tokens are already theme-aware (they depend on current_theme).
+// This module defines the Theme enum and ThemeState global,
+// and re-exports all the design tokens (colors, spacing, typography, radius, elevation)
+// for convenience.
 
-// Re-export the Theme enum and the ThemeState global from colors.slint.
-// Slint does not support re-exporting a single property like `current_theme` as a standalone symbol.
-export { Theme, ThemeState, Colors } from "./colors.slint";
+export enum Theme {
+    Light,
+    Dark,
+}
 
-// Re-export the other token files
+export global ThemeState {
+    in property <Theme> current-theme: Theme.Light;
+}
+
+// Re-export the token files
 export { Spacing } from "./spacing.slint";
 export { Typography, TextStyle } from "./typography.slint";
 export { Radius } from "./radius.slint";
 export { Elevation } from "./elevation.slint";
+// Re-export Colors from colors.slint (unchanged)
+export { Colors } from "./colors.slint";

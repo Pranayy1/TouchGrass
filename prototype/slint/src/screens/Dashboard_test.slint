@@ -1,0 +1,22 @@
+import { Colors } from "../ui/theme/colors.slint"
+
+export component Dashboard_test inherits Rectangle {
+    background: Colors.surface
+
+    callback get_data
+
+    in property <string> test: "hello"
+
+    Timer {
+        interval: 1000
+        repeating: true
+        started: true
+        => {
+            root.test = "world"
+        }
+    }
+
+    Text {
+        text: root.test
+    }
+}

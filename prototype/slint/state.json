@@ -1,0 +1,13 @@
+{
+  "total_millis": 0,
+  "current_app": "Tracking paused",
+  "per_app_millis": {},
+  "tracking_enabled": false,
+  "hide_on_close": false,
+  "day_key": "2026-08-30",
+  "processed_hours": 0,
+  "five_hour_alert_sent": false,
+  "hourly_notifications_sent": [],
+  "hourly_notifications_enabled": true,
+  "notifications": []
+}
